@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הצטרפות כספק אירועים — ביגי ספקים</title>
+<meta name="description" content="הצטרפו לאלפי ספקי האירועים שכבר מוצאים לקוחות חדשים דרך ביגי ספקים. הרשמה חינמית ומהירה.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛍️</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a href="index.html" class="logo">ביגי ספקים<span class="dot">.</span></a>
+    <nav class="main-nav">
+      <a href="index.html">בית</a>
+      <a href="vendors.html">כל הספקים</a>
+      <a href="join.html" class="active">הצטרפות כספק</a>
+    </nav>
+    <div class="header-actions">
+      <a href="chat.html" class="nav-chat-link" aria-label="הצ'אטים שלי">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span class="nav-chat-count" hidden>0</span>
+      </a>
+      <a href="favorites.html" class="nav-fav-link" aria-label="המועדפים שלי">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.6-4.6-10.2-9.6C.2 7.2 2.4 3.2 6.6 3.2c2.1 0 3.7 1.1 5.4 3 1.7-1.9 3.3-3 5.4-3 4.2 0 6.4 4 4.8 8.2C19.6 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>
+        <span class="nav-fav-count" hidden>0</span>
+      </a>
+      <a href="dashboard.html" class="nav-text-link" data-vendor-only hidden>לוח בקרה</a>
+      <a href="login.html" class="nav-text-link" data-guest-only>כניסת ספקים</a>
+      <a href="customer-login.html" class="btn btn-primary btn-sm" data-customer-guest>התחברות</a>
+      <a href="#" id="customer-account-pill" class="btn btn-secondary btn-sm" data-customer-logged-in hidden title="לחצו להתנתקות">שלום, <span class="customer-name-slot"></span> · יציאה</a>
+      <button class="nav-toggle" aria-label="תפריט"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<section class="join-hero">
+  <div class="wrap">
+    <h1>הצטרפו כספקי אירועים לביגי</h1>
+    <p>אלפי לקוחות מתכננים אירוע ומחפשים ספקים כמוכם כל יום. פרופיל מקצועי, הזמנות ישירות ותוך דקות אתם ברשת — חינם.</p>
+  </div>
+</section>
+
+<div class="join-form-wrap">
+  <div class="join-form-card">
+
+    <form id="join-form">
+      <h2>ספרו לנו על העסק שלכם</h2>
+      <p>נחזור אליכם תוך יום עסקים אחד עם אישור ההצטרפות</p>
+
+      <div class="form-row">
+        <div class="form-field">
+          <label for="biz-name">שם העסק</label>
+          <input id="biz-name" type="text" required placeholder="לדוגמה: סטודיו לומן">
+        </div>
+        <div class="form-field">
+          <label for="owner-name">שם איש קשר</label>
+          <input id="owner-name" type="text" required placeholder="השם המלא שלכם">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-field">
+          <label for="phone">טלפון</label>
+          <input id="phone" type="tel" required placeholder="050-0000000">
+        </div>
+        <div class="form-field">
+          <label for="city">עיר פעילות</label>
+          <select id="city" required>
+            <option value="">בחרו עיר</option>
+            <option>תל אביב</option><option>ירושלים</option><option>חיפה</option><option>ראשון לציון</option><option>באר שבע</option><option>פתח תקווה</option><option>נתניה</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-label-block">באיזה תחומים אתם פעילים? (ניתן לבחור כמה)</div>
+      <div class="cat-picker-grid" id="cat-picker-grid"></div>
+
+      <div class="field-label-block">תמונות או סרטון מהעבודות שלכם (חובה)</div>
+      <div class="upload-dropzone" id="media-dropzone">
+        <input type="file" id="media-upload" accept="image/*,video/*" multiple required>
+        <div class="upload-icon">📸</div>
+        <div class="upload-text"><strong>גררו קבצים לכאן</strong> או לחצו לבחירה</div>
+        <div class="upload-hint">JPG, PNG או MP4 — עד 5 קבצים. נדרש לפחות קובץ אחד כדי להצטרף.</div>
+      </div>
+      <div class="upload-chip-list" id="media-upload-list"></div>
+
+      <div class="form-field">
+        <label for="about">קצת עליכם ועל השירות שאתם מציעים</label>
+        <textarea id="about" placeholder="ספרו ללקוחות למה כדאי לבחור בכם..."></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">שליחת בקשת הצטרפות</button>
+    </form>
+
+    <div class="form-success" id="form-success">
+      <div class="icon">🎉</div>
+      <h2>הבקשה נשלחה בהצלחה!</h2>
+      <p style="color:var(--muted); margin-top:8px;">נציג שלנו יחזור אליכם בקרוב כדי להשלים את הצטרפותכם לביגי ספקים.</p>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap;">
+        <a href="dashboard.html" class="btn btn-primary">מעבר ללוח הבקרה שלכם</a>
+        <a href="index.html" class="btn btn-secondary">חזרה לדף הבית</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer class="site-footer" style="padding-top:32px;">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 ביגי ספקים. כל הזכויות שמורות.</span>
+      <span>תנאי שימוש · פרטיות</span>
+    </div>
+  </div>
+</footer>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

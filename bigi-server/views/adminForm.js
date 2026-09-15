@@ -1,0 +1,153 @@
+const { page, escapeHtml } = require('./layout');
+
+const MIN_PRODUCT_IMAGES = 5;
+const MAX_PRODUCT_IMAGES = 10;
+
+function photoRow(n, removable) {
+  return `
+    <div class="product-photo-row" data-photo-row>
+      <div style="flex:1;">
+        <label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה ${n}</label>
+        <input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>
+        <input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" style="margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:13.5px;">
+      </div>
+      ${removable ? `<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>` : ''}
+    </div>`;
+}
+
+function createFormPage({ adminEmail, error, values = {} } = {}) {
+  const v = (k) => escapeHtml(values[k] || '');
+
+  const body = `
+    <div class="admin-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <h1 style="margin-bottom:0;">➕ פרופיל ספק חדש</h1>
+        <form method="POST" action="/admin-suppliers/logout"><button type="submit" class="btn btn-ghost btn-sm">התנתקות (${escapeHtml(adminEmail)})</button></form>
+      </div>
+      <p class="lead">הפרופיל נוצר כ"לא מופיע באתר" ונשלח קישור פרטי אליו לשני המיילים המורשים בלבד.</p>
+
+      ${error ? `<div class="admin-alert error">${escapeHtml(error)}</div>` : ''}
+
+      <form method="POST" action="/admin-suppliers/create" enctype="multipart/form-data" id="supplier-form">
+        <div class="form-field">
+          <label for="name">שם הספק *</label>
+          <input id="name" name="name" type="text" required value="${v('name')}" placeholder="לדוגמה: סטודיו לומן">
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label for="category">קטגוריה *</label>
+            <input id="category" name="category" type="text" required value="${v('category')}" placeholder="לדוגמה: צילום, קייטרינג...">
+          </div>
+          <div class="form-field">
+            <label for="phone">טלפון</label>
+            <input id="phone" name="phone" type="tel" value="${v('phone')}" placeholder="050-0000000">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="description">תיאור כללי</label>
+          <textarea id="description" name="description" placeholder="כמה מילים על הספק ועל השירות שהוא מציע...">${v('description')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label for="contactEmail">מייל ליצירת קשר</label>
+            <input id="contactEmail" name="contactEmail" type="email" value="${v('contactEmail')}" placeholder="contact@business.co.il">
+          </div>
+          <div class="form-field">
+            <label for="links">קישורים (אתר / אינסטגרם וכו')</label>
+            <input id="links" name="links" type="text" value="${v('links')}" placeholder="https://...">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label>תמונות מוצר * (לפחות ${MIN_PRODUCT_IMAGES})</label>
+          <div class="field-hint" style="margin-bottom:12px;">JPG / PNG / WebP, עד 5MB לתמונה. לכל תמונה יש שדה תיאור משלה מיד מתחתיה.</div>
+          <div id="product-photo-rows">
+            ${Array.from({ length: MIN_PRODUCT_IMAGES }, (_, i) => photoRow(i + 1, false)).join('')}
+          </div>
+          <button type="button" id="add-photo-row-btn" class="btn btn-secondary btn-sm" style="margin-top:4px;">+ הוספת תמונה נוספת</button>
+        </div>
+
+        <div class="form-field">
+          <label for="background-image-input">תמונת רקע לפרופיל *</label>
+          <input type="file" id="background-image-input" name="backgroundImage" accept="image/png,image/jpeg,image/webp" required>
+          <div class="bg-preview-note">
+            📐 מידות מומלצות: <strong>1920×1080 פיקסלים</strong> (יחס רוחב-גובה 16:9). התמונה תוצג כרקע לעמוד הפרופיל עם טשטוש קל ושכבת כהות עדינה, כדי שהטקסט מעליה יישאר קריא. לתמונה זו אין צורך בתיאור.
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">יצירת פרופיל ושליחת קישור</button>
+      </form>
+    </div>
+
+    <script>
+      (function(){
+        var MAX_PRODUCT_IMAGES = ${MAX_PRODUCT_IMAGES};
+        var rowsContainer = document.getElementById('product-photo-rows');
+        var addBtn = document.getElementById('add-photo-row-btn');
+
+        function renumber(){
+          var rows = rowsContainer.querySelectorAll('[data-photo-row]');
+          rows.forEach(function(row, i){
+            row.querySelector('label').textContent = 'תמונה ' + (i + 1);
+          });
+          addBtn.hidden = rows.length >= MAX_PRODUCT_IMAGES;
+        }
+
+        addBtn.addEventListener('click', function(){
+          var rows = rowsContainer.querySelectorAll('[data-photo-row]');
+          if(rows.length >= MAX_PRODUCT_IMAGES) return;
+          var div = document.createElement('div');
+          div.className = 'product-photo-row';
+          div.setAttribute('data-photo-row', '');
+          div.innerHTML =
+            '<div style="flex:1;">' +
+              '<label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה</label>' +
+              '<input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>' +
+              '<input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" style="margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:13.5px;">' +
+            '</div>' +
+            '<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>';
+          rowsContainer.appendChild(div);
+          renumber();
+        });
+
+        rowsContainer.addEventListener('click', function(e){
+          var removeBtn = e.target.closest('.remove-row-btn');
+          if(!removeBtn) return;
+          removeBtn.closest('[data-photo-row]').remove();
+          renumber();
+        });
+
+        var form = document.getElementById('supplier-form');
+        var btn = document.getElementById('submit-btn');
+        form.addEventListener('submit', function(){
+          btn.textContent = 'שולח ומעלה תמונות...';
+          btn.style.pointerEvents = 'none';
+        });
+      })();
+    </script>
+  `;
+  return page({ title: 'יצירת פרופיל ספק — אזור ניהול', body });
+}
+
+function successPage({ name, link }) {
+  const body = `
+    <div class="admin-card" style="text-align:center;">
+      <div style="font-size:52px; margin-bottom:12px;">✅</div>
+      <h1>הפרופיל של "${escapeHtml(name)}" נוצר בהצלחה</h1>
+      <p class="lead">הפרופיל <strong>לא מופיע</strong> באתר הציבורי. קישור פרטי נשלח למיילים המורשים.</p>
+      <div class="link-box">
+        <span>🔗</span>
+        <a href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(link)}</a>
+      </div>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:28px;">
+        <a href="/admin-suppliers" class="btn btn-primary">יצירת פרופיל נוסף</a>
+      </div>
+    </div>
+  `;
+  return page({ title: 'הפרופיל נוצר — אזור ניהול', body });
+}
+
+module.exports = { createFormPage, successPage };

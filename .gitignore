@@ -1,0 +1,11 @@
+# This repo only deploys the "bigi" marketplace (bigi/ + bigi-server/).
+# Everything else in this folder is unrelated local work and stays out.
+/atelier/
+/chagiga/
+/scrollcraft/
+/index.html
+/script.js
+/style.css
+/serve.ps1
+/10k-websites-skill.zip
+/.claude/
