@@ -337,7 +337,9 @@
   function initCarousel(){
     const track = $('#vendor-carousel-track');
     if(!track) return;
-    const top = listedVendors().filter(v => v.rating != null).sort((a,b)=>b.rating-a.rating).slice(0,8);
+    // The admins' "מומלצים" list, in their order; no list → no section.
+    const top = listedVendors().filter(v => v.featuredRank != null).sort((a,b)=>a.featuredRank-b.featuredRank);
+    track.closest('section').hidden = top.length === 0;
     track.innerHTML = top.map((v,i) => vendorCardHtml(v,i)).join('');
     let offset = 0;
     const cardWidth = 310;
@@ -473,6 +475,7 @@
       $('#signup-confirm-field').hidden = !signup;
       $('#auth-switch-login').hidden = signup;
       $('#auth-switch-signup').hidden = !signup;
+      $('#forgot-password-btn').hidden = signup;
       nameInput.required = signup;
       confirmInput.required = signup;
       passwordInput.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
@@ -490,6 +493,37 @@
       else if(user.role === 'supplier') location.href = 'dashboard.html';
       else location.href = 'index.html';
     };
+
+    // "שכחתם סיסמה?" — swaps the login card for the reset-request form.
+    const authPanel = $('#auth-panel');
+    const resetPanel = $('#reset-request-panel');
+    const showResetPanel = (open) => {
+      authPanel.hidden = open;
+      resetPanel.hidden = !open;
+      if(open){
+        $('#reset-email').value = $('#auth-email').value.trim();
+        $('#reset-request-error').hidden = true;
+        $('#reset-request-done').hidden = true;
+        $('#reset-email').focus();
+      }
+    };
+    $('#forgot-password-btn').addEventListener('click', () => showResetPanel(true));
+    $('#back-to-login-btn').addEventListener('click', () => { showResetPanel(false); setMode('login'); });
+    if(params.get('reset') === '1') showResetPanel(true);
+
+    $('#reset-request-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = $('#reset-request-error');
+      const doneEl = $('#reset-request-done');
+      const btn = $('#reset-request-submit');
+      errorEl.hidden = true;
+      doneEl.hidden = true;
+      btn.disabled = true;
+      const { ok, data } = await api('/api/auth/password-reset/request', { method: 'POST', json: { email: $('#reset-email').value.trim() } });
+      btn.disabled = false;
+      if(ok){ doneEl.textContent = data.message; doneEl.hidden = false; }
+      else { errorEl.textContent = data.error || 'משהו השתבש. נסו שוב.'; errorEl.hidden = false; }
+    });
 
     // Already signed in when the page opened: nothing to do here.
     let submitted = false;
@@ -614,8 +648,10 @@
         }
         return true;
       });
+      // "מומלצים" (default): the admins' picks first, in their order; the rest keep their order.
+      if(state.sort === 'recommended') list.sort((a,b)=>(a.featuredRank ?? Infinity)-(b.featuredRank ?? Infinity));
       // Suppliers without a price or rating yet go last.
-      if(state.sort === 'price-asc') list.sort((a,b)=>(a.priceFrom ?? Infinity)-(b.priceFrom ?? Infinity));
+      else if(state.sort === 'price-asc') list.sort((a,b)=>(a.priceFrom ?? Infinity)-(b.priceFrom ?? Infinity));
       else if(state.sort === 'price-desc') list.sort((a,b)=>(b.priceFrom ?? -Infinity)-(a.priceFrom ?? -Infinity));
       else if(state.sort === 'rating') list.sort((a,b)=>(b.rating ?? -1)-(a.rating ?? -1));
       return list;
@@ -777,6 +813,43 @@
     renderCompareUI();
   }
 
+  /* ---------- New password page (link from the reset email) ---------- */
+  function initResetPasswordPage(){
+    const form = $('#reset-form');
+    if(!form) return;
+    const token = new URLSearchParams(location.search).get('token') || '';
+    const show = (id) => {
+      ['reset-loading', 'reset-invalid', 'reset-done'].forEach(s => $('#' + s).hidden = s !== id);
+      form.hidden = id !== 'form';
+    };
+
+    api(`/api/auth/password-reset/check?token=${encodeURIComponent(token)}`).then(({ ok, data }) => {
+      show(ok && data.valid ? 'form' : 'reset-invalid');
+    });
+
+    const errorBox = $('#reset-error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      const password = $('#new-password').value;
+      if(password !== $('#new-password-confirm').value){
+        errorBox.textContent = 'הסיסמאות לא תואמות.';
+        errorBox.hidden = false;
+        return;
+      }
+      const btn = $('#reset-submit');
+      btn.disabled = true;
+      const { ok, data } = await api('/api/auth/password-reset/confirm', { method: 'POST', json: { token, password } });
+      btn.disabled = false;
+      if(!ok){ errorBox.textContent = data.error || 'משהו השתבש. נסו שוב.'; errorBox.hidden = false; return; }
+      Account.set(data.user);
+      if(data.user.role === 'supplier') $('#reset-continue').href = 'dashboard.html';
+      // Drop the used token from the address bar.
+      history.replaceState(null, '', 'reset-password.html');
+      show('reset-done');
+    });
+  }
+
   /* ---------- Supplier sign-up form (same fields as the admin "create profile" form) ---------- */
   const MIN_PRODUCT_IMAGES = 5;
   const MAX_PRODUCT_IMAGES = 10;
@@ -931,6 +1004,7 @@
     initDashboard();
     initFavoritesPage();
     initLoginPage();
+    initResetPasswordPage();
     initLiveTicker();
     renderCompareUI();
     renderFavoritesUI();

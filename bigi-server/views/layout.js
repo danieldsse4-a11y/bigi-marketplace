@@ -13,6 +13,7 @@ function adminTabs(active) {
   return `<nav class="admin-tabs" aria-label="אזור ניהול">
     ${tab('/admin-suppliers', 'create', '➕ פרופיל חדש')}
     ${tab('/admin-suppliers/profiles', 'profiles', '📋 כל הפרופילים')}
+    ${tab('/admin-suppliers/featured', 'featured', '⭐ מומלצים')}
   </nav>`;
 }
 
@@ -78,6 +79,24 @@ function page({ title, body, extraHead = '', wide = false }) {
   .visibility-switch[aria-busy="true"]{ opacity:.6; pointer-events:none; }
   .visibility-switch:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; border-radius:12px; }
 
+  .featured-chip{ display:inline-block; margin-inline-start:6px; padding:2px 8px; border-radius:var(--radius-pill); background:#FFF4DB; color:#9A6700; font-size:11.5px; font-weight:800; vertical-align:middle; }
+  .demo-note{ color:#9A6700; font-weight:700; }
+
+  .featured-list{ list-style:none; margin:0; padding:0; counter-reset:rank; }
+  .featured-row{ display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-md); margin-bottom:8px; background:#fff; }
+  .featured-row.is-featured{ border-color:#F5D67A; background:#FFFCF2; }
+  .featured-rank{ width:28px; height:28px; flex-shrink:0; border-radius:50%; background:var(--grad-main); color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  .featured-actions{ display:flex; gap:6px; flex-shrink:0; }
+  .icon-btn{ width:40px; height:40px; border-radius:12px; background:var(--bg-soft); border:1px solid var(--line); color:var(--ink-soft); font-size:16px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .icon-btn:hover:not(:disabled){ background:var(--primary-soft); color:var(--primary); border-color:var(--primary-light); }
+  .icon-btn:disabled{ opacity:.35; cursor:default; }
+  .icon-btn.danger:hover{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent-light); }
+  .add-btn{ padding:9px 14px; border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary); font-weight:800; font-size:13.5px; flex-shrink:0; min-height:40px; }
+  .add-btn:hover:not(:disabled){ background:var(--primary); color:#fff; }
+  .add-btn:disabled{ opacity:.45; cursor:default; }
+  .featured-search{ width:100%; padding:12px 16px; border-radius:var(--radius-pill); border:1.5px solid var(--line); font-size:15px; outline:none; margin-bottom:12px; }
+  .featured-search:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
+
   .admin-toast{ position:fixed; bottom:24px; left:50%; transform:translate(-50%, 30px); opacity:0; background:var(--ink); color:#fff; padding:12px 20px; border-radius:var(--radius-pill); font-weight:700; font-size:14px; transition:all .3s var(--ease-out); z-index:50; max-width:calc(100% - 32px); text-align:center; }
   .admin-toast.show{ opacity:1; transform:translate(-50%, 0); }
   .admin-toast.error{ background:#B8323C; }
@@ -93,6 +112,13 @@ function page({ title, body, extraHead = '', wide = false }) {
     .profile-thumb{ width:48px; height:48px; font-size:22px; }
     .profile-meta{ font-size:12px; }
     .profiles-filters button{ padding:10px 14px; }
+    .admin-tabs{ gap:2px; padding:4px; }
+    .admin-tabs a{ padding:10px 6px; font-size:13px; }
+    .featured-row{ gap:8px 10px; padding:10px; flex-wrap:wrap; }
+    .featured-row .profile-info{ flex:1 1 150px; }
+    .featured-row .profile-name{ white-space:normal; }
+    .featured-actions{ flex-basis:100%; justify-content:flex-end; }
+    .featured-search{ font-size:16px; }
   }
 </style>
 ${extraHead}

@@ -108,6 +108,7 @@
         <div class="form-field">
           <label for="auth-password">סיסמה</label>
           <input id="auth-password" name="password" type="password" required minlength="8" maxlength="200" autocomplete="current-password" placeholder="לפחות 8 תווים">
+          <button type="button" class="forgot-link" id="forgot-password-btn">שכחתם סיסמה?</button>
         </div>
         <div class="form-field" id="signup-confirm-field" hidden>
           <label for="auth-confirm">אימות סיסמה</label>
@@ -116,6 +117,21 @@
         <button type="submit" class="btn btn-primary btn-block" id="auth-submit">התחברות</button>
         <p class="auth-switch" id="auth-switch-login">אין לכם עדיין חשבון? <button type="button" data-auth-tab="signup">להרשמה</button></p>
         <p class="auth-switch" id="auth-switch-signup" hidden>כבר יש לכם חשבון? <button type="button" data-auth-tab="login">להתחברות</button></p>
+      </form>
+    </div>
+
+    <div id="reset-request-panel" hidden>
+      <h2>איפוס סיסמה</h2>
+      <p class="auth-panel-text">הזינו את האימייל של החשבון, ונשלח אליו קישור לבחירת סיסמה חדשה.</p>
+      <form id="reset-request-form">
+        <div class="form-alert" id="reset-request-error" role="alert" hidden></div>
+        <div class="form-alert success" id="reset-request-done" role="status" hidden></div>
+        <div class="form-field">
+          <label for="reset-email">אימייל</label>
+          <input id="reset-email" name="email" type="email" required maxlength="120" autocomplete="email" placeholder="you@example.com">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="reset-request-submit">שליחת קישור לאיפוס</button>
+        <p class="auth-switch"><button type="button" id="back-to-login-btn">← חזרה להתחברות</button></p>
       </form>
     </div>
 

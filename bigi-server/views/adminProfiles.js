@@ -19,7 +19,7 @@ function createdRow(row) {
     <div class="profile-row" data-state="${row.published ? 'live' : 'demo'}">
       <div class="profile-thumb" style="${thumbStyle}"></div>
       <div class="profile-info">
-        <div class="profile-name">${escapeHtml(row.name)}</div>
+        <div class="profile-name">${escapeHtml(row.name)}${row.featured ? '<span class="featured-chip">⭐ מומלץ</span>' : ''}</div>
         <div class="profile-meta">${meta}</div>
         ${row.createdBy ? `<div class="profile-meta">${row.fromSupplier ? 'נשלח על ידי הספק' : 'נוצר על ידי'} ${escapeHtml(row.createdBy)}</div>` : ''}
         <div class="profile-links">
@@ -37,7 +37,7 @@ function sampleRow(row) {
     <div class="profile-row" data-state="${row.published ? 'live' : 'demo'}">
       <div class="profile-thumb" style="background:var(--${escapeHtml(row.grad || 'g1')})">${escapeHtml(row.emoji || '')}</div>
       <div class="profile-info">
-        <div class="profile-name">${escapeHtml(row.name)}</div>
+        <div class="profile-name">${escapeHtml(row.name)}${row.featured ? '<span class="featured-chip">⭐ מומלץ</span>' : ''}</div>
         <div class="profile-meta">${meta}</div>
         <div class="profile-links">
           <a href="${escapeHtml(row.viewUrl)}" target="_blank" rel="noopener">צפייה ↗</a>

@@ -19,6 +19,7 @@ const scrypt = promisify(crypto.scrypt);
 const SESSION_COOKIE = 'bigi_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ADMIN_VERIFY_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const ROLES = ['customer', 'supplier'];
 
 function getWhitelist() {
@@ -174,6 +175,42 @@ async function consumeAdminVerifyToken(token) {
   });
 }
 
+function findUser(email) {
+  return findUserByEmail(load(), email);
+}
+
+async function createPasswordResetToken(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await withDb((db) => {
+    db.magicTokens[token] = { userId, purpose: 'password-reset', expiresAt: Date.now() + PASSWORD_RESET_TTL_MS, used: false };
+  });
+  return token;
+}
+
+function isPasswordResetTokenValid(token) {
+  const entry = load().magicTokens[token];
+  return Boolean(entry && entry.purpose === 'password-reset' && !entry.used && Date.now() <= entry.expiresAt && load().users[entry.userId]);
+}
+
+// Sets the new password and signs the account out everywhere. Returns the
+// user, or null if the token is missing, used or expired.
+async function resetPassword(token, newPassword) {
+  const passwordHash = await hashPassword(newPassword);
+  return withDb((db) => {
+    const entry = db.magicTokens[token];
+    if (!entry || entry.purpose !== 'password-reset' || entry.used || Date.now() > entry.expiresAt) return null;
+    const user = db.users[entry.userId];
+    if (!user) return null;
+    entry.used = true;
+    user.passwordHash = passwordHash;
+    user.passwordChangedAt = new Date().toISOString();
+    for (const [id, session] of Object.entries(db.sessions)) {
+      if (session.userId === user.id) delete db.sessions[id];
+    }
+    return user;
+  });
+}
+
 module.exports = {
   ROLES,
   SESSION_COOKIE,
@@ -192,4 +229,8 @@ module.exports = {
   requireAdmin,
   createAdminVerifyToken,
   consumeAdminVerifyToken,
+  findUser,
+  createPasswordResetToken,
+  isPasswordResetTokenValid,
+  resetPassword,
 };

@@ -17,7 +17,36 @@ function isSamplePublished(db, sampleId) {
   return db.sampleVisibility[sampleId]?.published !== false;
 }
 
+/* ---------- "מומלצים": an ordered list of profile keys chosen by admins.
+   Until an admin saves the list, it's the samples that shipped with the
+   "מומלץ" badge, so the site looks the same as before. ---------- */
+const MAX_FEATURED = 30;
+
+function featuredKeys(db) {
+  if (Array.isArray(db.featured)) return db.featured;
+  return SAMPLE_VENDORS.filter((v) => v.badge === 'מומלץ').map((v) => SAMPLE_KEY_PREFIX + v.id);
+}
+
+function profileExists(db, key) {
+  if (key.startsWith(SAMPLE_KEY_PREFIX)) {
+    return SAMPLE_VENDORS.some((v) => SAMPLE_KEY_PREFIX + v.id === key);
+  }
+  return Boolean(db.suppliers[key]);
+}
+
+// Returns an error message, or null after saving the new order.
+function setFeatured(db, keys, adminEmail) {
+  if (!Array.isArray(keys) || keys.some((k) => typeof k !== 'string')) return 'רשימה לא תקינה';
+  const unique = [...new Set(keys)];
+  if (unique.length > MAX_FEATURED) return `אפשר לסמן עד ${MAX_FEATURED} ספקים מומלצים`;
+  if (unique.some((k) => !profileExists(db, k))) return 'אחד הפרופילים לא נמצא';
+  db.featured = unique;
+  db.featuredUpdated = { at: new Date().toISOString(), by: adminEmail };
+  return null;
+}
+
 function adminRows(db) {
+  const featuredRank = new Map(featuredKeys(db).map((k, i) => [k, i]));
   const rows = Object.values(db.suppliers)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
     .map((s) => ({
@@ -32,6 +61,7 @@ function adminRows(db) {
         ? `${db.users[s.ownerUserId].name} (${db.users[s.ownerUserId].email})`
         : s.createdBy,
       published: Boolean(s.isPublic),
+      featured: featuredRank.has(s.id),
       viewUrl: `/supplier/view/${s.id}`,
       image: s.backgroundImage,
     }));
@@ -45,12 +75,25 @@ function adminRows(db) {
     categoryLabel: categoryById(v.cat)?.name || '',
     city: v.city,
     published: isSamplePublished(db, v.id),
+    featured: featuredRank.has(SAMPLE_KEY_PREFIX + v.id),
     viewUrl: `/vendor.html?id=${v.id}`,
     emoji: v.emoji,
     grad: v.grad,
   }));
 
   return { fromSuppliers, created, samples };
+}
+
+// For the admin "מומלצים" page: the chosen profiles in order, then the rest.
+function featuredRows(db) {
+  const { fromSuppliers, created, samples } = adminRows(db);
+  const byKey = new Map([...fromSuppliers, ...created, ...samples].map((r) => [r.key, r]));
+  const keys = featuredKeys(db).filter((k) => byKey.has(k));
+  const chosen = new Set(keys);
+  return {
+    featured: keys.map((k) => byKey.get(k)),
+    others: [...byKey.values()].filter((r) => !chosen.has(r.key)),
+  };
 }
 
 // A supplier's own profile, as shown in their dashboard.
@@ -102,9 +145,16 @@ function setPublished(db, key, published, adminEmail) {
 // The supplier list visitors get. Admins also get demo samples (flagged
 // `hidden`) so sample profile pages still open for them; public lists skip those.
 function publicVendors(db, { isAdmin }) {
+  const rank = new Map(featuredKeys(db).map((k, i) => [k, i]));
+  // Only admin-picked suppliers carry the "מומלץ" badge; other badges stay.
+  const featuredFields = (key, otherBadge) => (rank.has(key)
+    ? { badge: 'מומלץ', featuredRank: rank.get(key) }
+    : { badge: otherBadge === 'מומלץ' ? null : otherBadge, featuredRank: null });
+
   const samples = SAMPLE_VENDORS.flatMap((v) => {
-    if (isSamplePublished(db, v.id)) return [v];
-    return isAdmin ? [{ ...v, hidden: true }] : [];
+    const vendor = { ...v, ...featuredFields(SAMPLE_KEY_PREFIX + v.id, v.badge) };
+    if (isSamplePublished(db, v.id)) return [vendor];
+    return isAdmin ? [{ ...vendor, hidden: true }] : [];
   });
 
   const live = Object.values(db.suppliers)
@@ -120,7 +170,7 @@ function publicVendors(db, { isAdmin }) {
         rating: null,
         reviews: 0,
         priceFrom: null,
-        badge: 'חדש',
+        ...featuredFields(s.id, 'חדש'),
         tag: cat ? cat.name : (s.category || ''),
         grad: cat ? cat.grad : 'g1',
         emoji: cat ? cat.icon : '⭐',
@@ -138,4 +188,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, ownProfile, setPublished, dataJs };
+module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, ownProfile, setPublished, dataJs };
