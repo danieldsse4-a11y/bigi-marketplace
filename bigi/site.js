@@ -87,8 +87,10 @@
       }catch(e){}
       document.dispatchEvent(new CustomEvent('account:change'));
     },
+    assistantEnabled: false,
     async refresh(){
       const { ok, data } = await api('/api/auth/me');
+      if(ok) this.assistantEnabled = !!data.assistantEnabled;
       if(ok) this.set(data.user || null);
       else { this.loaded = true; document.dispatchEvent(new CustomEvent('account:change')); }
       return this.user;
@@ -988,6 +990,206 @@
     }, 6000);
   }
 
+  /* ---------- Event-planning assistant: floating chat + checklist ----------
+     The assistant's text is always inserted with textContent, never as HTML.
+     The conversation and the checklist live in this browser (localStorage). */
+  const Assistant = {
+    chatKey: 'bigi_assistant_chat',
+    listKey: 'bigi_checklist',
+    load(key){ try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; } },
+    save(key, value){ try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){} },
+    get history(){ return this.load(this.chatKey); },
+    set history(v){ this.save(this.chatKey, v.slice(-40)); },
+    get checklist(){ return this.load(this.listKey).filter(id => CATEGORIES.some(c => c.id === id)); },
+    set checklist(v){ this.save(this.listKey, v); },
+    reset(){
+      try{ localStorage.removeItem(this.chatKey); localStorage.removeItem(this.listKey); }catch(e){}
+    }
+  };
+
+  // A category counts as done once at least one supplier in it is a favourite.
+  function doneCategories(){
+    const favs = FavoritesStore.get();
+    return new Set(favs.map(id => findVendor(id)?.cat).filter(Boolean));
+  }
+
+  function initAssistant(){
+    if($('.assistant-fab')) return;
+
+    const fab = document.createElement('button');
+    fab.type = 'button';
+    fab.className = 'assistant-fab';
+    fab.hidden = true;
+    fab.setAttribute('aria-expanded', 'false');
+    fab.innerHTML = '<span aria-hidden="true">✨</span><span class="assistant-fab-label">עוזר תכנון</span>';
+
+    const panel = document.createElement('section');
+    panel.className = 'assistant-panel';
+    panel.hidden = true;
+    panel.setAttribute('aria-label', 'עוזר תכנון האירוע');
+    panel.innerHTML = `
+      <header class="assistant-head">
+        <strong>✨ עוזר תכנון האירוע</strong>
+        <div class="assistant-head-actions">
+          <button type="button" class="assistant-restart" hidden>שיחה חדשה</button>
+          <button type="button" class="assistant-close" aria-label="סגירת העוזר">✕</button>
+        </div>
+      </header>
+      <div class="assistant-messages" role="log" aria-live="polite"></div>
+      <form class="assistant-input-row" hidden>
+        <input type="text" maxlength="600" required autocomplete="off" placeholder="כתבו כאן…" aria-label="ההודעה שלכם">
+        <button type="submit" class="btn btn-primary btn-sm">שליחה</button>
+      </form>`;
+
+    const checklist = document.createElement('aside');
+    checklist.className = 'checklist-bar';
+    checklist.hidden = true;
+    checklist.setAttribute('aria-label', 'רשימת הספקים שלי');
+    checklist.innerHTML = `
+      <button type="button" class="checklist-toggle" aria-expanded="true">
+        <span>📋 הרשימה שלי</span>
+        <span class="checklist-progress"></span>
+      </button>
+      <ul class="checklist-items"></ul>`;
+
+    document.body.append(fab, panel, checklist);
+
+    const messagesBox = $('.assistant-messages', panel);
+    const inputRow = $('.assistant-input-row', panel);
+    const input = $('input', inputRow);
+    const restartBtn = $('.assistant-restart', panel);
+
+    function bubble(role, text){
+      const el = document.createElement('div');
+      el.className = `assistant-bubble ${role}`;
+      el.textContent = text;
+      messagesBox.appendChild(el);
+      return el;
+    }
+    const scrollDown = () => { messagesBox.scrollTop = messagesBox.scrollHeight; };
+
+    function renderConversation(){
+      messagesBox.replaceChildren();
+      const user = Account.user;
+      if(!user){
+        const intro = document.createElement('div');
+        intro.className = 'assistant-guest';
+        intro.innerHTML = `<p>אני שואל כמה שאלות קצרות על האירוע שלכם, ובסוף מרכיב רשימת ספקים שכדאי לסגור.</p>
+          <p class="assistant-guest-note">כדי להתחיל, התחברו לחשבון שלכם.</p>`;
+        const link = document.createElement('a');
+        link.className = 'btn btn-primary btn-sm';
+        link.href = `login.html?next=${encodeURIComponent(location.pathname.replace(/^\//, '') || 'index.html')}`;
+        link.textContent = 'התחברות';
+        intro.appendChild(link);
+        messagesBox.appendChild(intro);
+        inputRow.hidden = true;
+        restartBtn.hidden = true;
+        return;
+      }
+      inputRow.hidden = false;
+      const history = Assistant.history;
+      restartBtn.hidden = history.length === 0;
+      bubble('assistant', `שלום ${user.name}! אשאל כמה שאלות קצרות על האירוע, ובסוף אכין לכם רשימת ספקים. איזה אירוע אתם מתכננים?`);
+      history.forEach(m => bubble(m.role, m.content));
+      scrollDown();
+    }
+
+    function renderChecklist(){
+      const ids = Assistant.checklist;
+      checklist.hidden = ids.length === 0;
+      if(!ids.length) return;
+      const done = doneCategories();
+      const list = $('.checklist-items', checklist);
+      list.replaceChildren();
+      ids.forEach(id => {
+        const cat = CATEGORIES.find(c => c.id === id);
+        const isDone = done.has(id);
+        const li = document.createElement('li');
+        li.className = `checklist-item${isDone ? ' done' : ''}`;
+        const link = document.createElement('a');
+        link.href = `vendors.html?cat=${encodeURIComponent(id)}`;
+        link.innerHTML = `<span class="checklist-status" aria-hidden="true">${isDone ? '✅' : '⏳'}</span>`;
+        link.append(`${cat.icon} ${cat.name}`);
+        link.title = isDone ? 'שמרתם ספק בקטגוריה הזו' : 'עדיין לא שמרתם ספק בקטגוריה הזו';
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+      $('.checklist-progress', checklist).textContent = `${ids.filter(id => done.has(id)).length}/${ids.length}`;
+    }
+
+    async function send(text){
+      const history = Assistant.history;
+      history.push({ role: 'user', content: text });
+      Assistant.history = history;
+      bubble('user', text);
+      restartBtn.hidden = false;
+
+      const typing = bubble('assistant typing', 'כותב…');
+      scrollDown();
+      input.disabled = true;
+
+      const { ok, data } = await api('/api/assistant/message', { method: 'POST', json: { messages: Assistant.history } });
+      typing.remove();
+      input.disabled = false;
+
+      if(!ok){
+        const err = bubble('assistant error', data.error || 'משהו השתבש. נסו שוב.');
+        err.classList.add('error');
+        scrollDown();
+        return;
+      }
+
+      const updated = Assistant.history;
+      updated.push({ role: 'assistant', content: data.reply });
+      Assistant.history = updated;
+      bubble('assistant', data.reply);
+      if(data.categories?.length){
+        Assistant.checklist = data.categories;
+        renderChecklist();
+      }
+      scrollDown();
+      input.focus();
+    }
+
+    const setOpen = (open) => {
+      panel.hidden = !open;
+      fab.setAttribute('aria-expanded', String(open));
+      if(open){
+        renderConversation();
+        if(!inputRow.hidden) input.focus();
+      }
+    };
+    fab.addEventListener('click', () => setOpen(panel.hidden));
+    $('.assistant-close', panel).addEventListener('click', () => setOpen(false));
+    document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !panel.hidden) setOpen(false); });
+
+    restartBtn.addEventListener('click', () => {
+      Assistant.reset();
+      renderConversation();
+      renderChecklist();
+    });
+
+    inputRow.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if(!text) return;
+      input.value = '';
+      send(text);
+    });
+
+    $('.checklist-toggle', checklist).addEventListener('click', () => {
+      const open = checklist.classList.toggle('collapsed');
+      $('.checklist-toggle', checklist).setAttribute('aria-expanded', String(!open));
+    });
+
+    document.addEventListener('favorites:change', renderChecklist);
+    document.addEventListener('account:change', () => {
+      fab.hidden = !Account.assistantEnabled;
+      if(!panel.hidden) renderConversation();
+    });
+    renderChecklist();
+  }
+
   /* ---------- Init ---------- */
   document.addEventListener('DOMContentLoaded', () => {
     const hint = Account.hint();
@@ -1005,6 +1207,7 @@
     initFavoritesPage();
     initLoginPage();
     initResetPasswordPage();
+    initAssistant();
     initLiveTicker();
     renderCompareUI();
     renderFavoritesUI();

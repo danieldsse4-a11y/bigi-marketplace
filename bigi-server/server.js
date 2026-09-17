@@ -12,6 +12,7 @@ const { sendEmail } = require('./lib/email');
 const auth = require('./lib/auth');
 const catalog = require('./lib/catalog');
 const supplierForm = require('./lib/supplierProfile');
+const assistant = require('./lib/assistant');
 const { categoryById } = require('./lib/siteData');
 const { messagePage, escapeHtml } = require('./views/layout');
 const { createFormPage, successPage } = require('./views/adminForm');
@@ -95,6 +96,8 @@ const createLimiter = limiter(60, 20, 'יותר מדי בקשות ליצירת �
 const visibilityLimiter = limiter(15, 150, 'יותר מדי שינויים. נסו שוב בעוד כמה דקות.');
 const resetRequestLimiter = limiter(60, 5, 'יותר מדי בקשות איפוס. נסו שוב מאוחר יותר.');
 const resetConfirmLimiter = limiter(15, 10, 'יותר מדי ניסיונות. נסו שוב בעוד כמה דקות.');
+// Each assistant message costs money, so cap it per visitor.
+const assistantLimiter = limiter(60, 40, 'הגעתם למגבלת ההודעות לשעה. נסו שוב מאוחר יותר.');
 
 /* ==========================================================================
    Accounts
@@ -159,7 +162,24 @@ app.post('/api/auth/logout', requireSameOrigin, async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   await db.init().catch(() => {});
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ user: auth.publicUser(auth.currentUser(req)) });
+  res.json({ user: auth.publicUser(auth.currentUser(req)), assistantEnabled: assistant.ENABLED });
+});
+
+/* ==========================================================================
+   Event-planning assistant (signed-in visitors only — each message costs money)
+   ========================================================================== */
+app.post('/api/assistant/message', requireSameOrigin, requireDb, auth.requireUser, assistantLimiter, async (req, res) => {
+  if (!assistant.ENABLED) return res.status(503).json({ error: 'העוזר החכם לא זמין כרגע.' });
+
+  const { history, error } = assistant.validateHistory(req.body?.messages);
+  if (error) return res.status(400).json({ error });
+
+  try {
+    res.json(await assistant.reply(history));
+  } catch (err) {
+    console.error('Assistant failed:', err.message);
+    res.status(502).json({ error: 'העוזר לא זמין כרגע. נסו שוב בעוד רגע.' });
+  }
 });
 
 app.post('/api/auth/admin-confirmation', requireSameOrigin, requireDb, auth.requireUser, adminVerifyLimiter, async (req, res) => {
