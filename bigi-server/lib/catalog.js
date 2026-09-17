@@ -18,20 +18,25 @@ function isSamplePublished(db, sampleId) {
 }
 
 function adminRows(db) {
-  const created = Object.values(db.suppliers)
+  const rows = Object.values(db.suppliers)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
     .map((s) => ({
       key: s.id,
       kind: 'created',
+      fromSupplier: s.source === 'supplier',
       name: s.name,
       categoryLabel: categoryById(s.category)?.name || s.category || '',
       city: s.city || '',
       createdAt: s.createdAt,
-      createdBy: s.createdBy,
+      createdBy: s.source === 'supplier' && db.users[s.ownerUserId]
+        ? `${db.users[s.ownerUserId].name} (${db.users[s.ownerUserId].email})`
+        : s.createdBy,
       published: Boolean(s.isPublic),
       viewUrl: `/supplier/view/${s.id}`,
       image: s.backgroundImage,
     }));
+  const fromSuppliers = rows.filter((r) => r.fromSupplier);
+  const created = rows.filter((r) => !r.fromSupplier);
 
   const samples = SAMPLE_VENDORS.map((v) => ({
     key: SAMPLE_KEY_PREFIX + v.id,
@@ -45,7 +50,28 @@ function adminRows(db) {
     grad: v.grad,
   }));
 
-  return { created, samples };
+  return { fromSuppliers, created, samples };
+}
+
+// A supplier's own profile, as shown in their dashboard.
+function ownProfile(db, userId) {
+  const s = Object.values(db.suppliers).find((x) => x.ownerUserId === userId);
+  if (!s) return null;
+  return {
+    id: s.id,
+    name: s.name,
+    categoryLabel: categoryById(s.category)?.name || s.category || '',
+    city: s.city || '',
+    description: s.description || '',
+    phone: s.phone || '',
+    contactEmail: s.contactEmail || '',
+    links: s.links || '',
+    backgroundImage: s.backgroundImage,
+    productImages: s.productImages,
+    published: Boolean(s.isPublic),
+    createdAt: s.createdAt,
+    viewUrl: `/supplier/view/${s.id}`,
+  };
 }
 
 // Returns false when the key doesn't match any profile.
@@ -112,4 +138,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, setPublished, dataJs };
+module.exports = { normalizePhone, adminRows, ownProfile, setPublished, dataJs };

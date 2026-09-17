@@ -51,73 +51,62 @@
   };
   window.FavoritesStore = FavoritesStore;
 
-  /* ---------- Vendor auth / session (demo — localStorage, no real backend) ---------- */
-  const VendorAuth = {
-    key: 'bigi_vendor_session',
-    get(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch(e){ return null; } },
-    isLoggedIn(){ return !!this.get(); },
-    login(vendor){
-      if(!vendor) return;
-      localStorage.setItem(this.key, JSON.stringify({ vendorId: vendor.id, name: vendor.name, verifiedPhone: null }));
-      document.dispatchEvent(new CustomEvent('vendorauth:change'));
+  /* ---------- Server calls ---------- */
+  async function api(url, { method = 'GET', json, formData } = {}){
+    const options = { method, credentials: 'same-origin', headers: {} };
+    if(json !== undefined){ options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(json); }
+    if(formData) options.body = formData;
+    try{
+      const res = await fetch(url, options);
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    }catch(e){
+      return { ok: false, status: 0, data: { error: 'אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.' } };
+    }
+  }
+
+  // Only same-site paths are allowed as a redirect target after login.
+  function safeNext(raw){
+    const next = String(raw || '');
+    return /^\/(?!\/)[\w\-./?=&%]*$/.test(next) || /^[\w-]+\.html(\?[\w\-=&%.]*)?$/.test(next) ? next : '';
+  }
+
+  /* ---------- Signed-in account (server session) ---------- */
+  const Account = {
+    user: null,
+    loaded: false,
+    hintKey: 'bigi_account_hint',
+    // Last known name/role, so the header doesn't flash "התחברות" while the real check runs.
+    hint(){ try{ return JSON.parse(localStorage.getItem(this.hintKey)); }catch(e){ return null; } },
+    set(user){
+      this.user = user;
+      this.loaded = true;
+      try{
+        if(user) localStorage.setItem(this.hintKey, JSON.stringify({ name: user.name, role: user.role, isAdmin: user.isAdmin }));
+        else localStorage.removeItem(this.hintKey);
+      }catch(e){}
+      document.dispatchEvent(new CustomEvent('account:change'));
     },
-    logout(){ localStorage.removeItem(this.key); document.dispatchEvent(new CustomEvent('vendorauth:change')); },
-    setVerifiedPhone(phone){
-      const s = this.get(); if(!s) return;
-      s.verifiedPhone = phone;
-      localStorage.setItem(this.key, JSON.stringify(s));
-      document.dispatchEvent(new CustomEvent('vendorauth:change'));
+    async refresh(){
+      const { ok, data } = await api('/api/auth/me');
+      if(ok) this.set(data.user || null);
+      else { this.loaded = true; document.dispatchEvent(new CustomEvent('account:change')); }
+      return this.user;
+    },
+    ready(){
+      if(this.loaded) return Promise.resolve(this.user);
+      return new Promise(resolve => document.addEventListener('account:change', () => resolve(this.user), { once: true }));
+    },
+    async logout(){
+      await api('/api/auth/logout', { method: 'POST' });
+      this.set(null);
     }
   };
-  window.VendorAuth = VendorAuth;
-
-  /* ---------- Customer auth / session (demo — localStorage, no real backend) ---------- */
-  const CustomerAuth = {
-    key: 'bigi_customer_session',
-    get(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch(e){ return null; } },
-    isLoggedIn(){ return !!this.get(); },
-    login(name){
-      localStorage.setItem(this.key, JSON.stringify({ name }));
-      document.dispatchEvent(new CustomEvent('customerauth:change'));
-    },
-    logout(){ localStorage.removeItem(this.key); document.dispatchEvent(new CustomEvent('customerauth:change')); }
-  };
-  window.CustomerAuth = CustomerAuth;
-
-  /* ---------- Profile checklist completion overrides (localStorage) ---------- */
-  const ChecklistStore = {
-    key: 'bigi_checklist_overrides',
-    get(){ try{ return JSON.parse(localStorage.getItem(this.key)) || {}; }catch(e){ return {}; } },
-    setDone(label, done){
-      const o = this.get(); o[label] = done;
-      localStorage.setItem(this.key, JSON.stringify(o));
-      document.dispatchEvent(new CustomEvent('checklist:change'));
-    }
-  };
-  window.ChecklistStore = ChecklistStore;
-
-  /* ---------- In-site chat (demo — localStorage, no real backend) ---------- */
-  const ChatStore = {
-    key: 'bigi_chats',
-    getAll(){ try{ return JSON.parse(localStorage.getItem(this.key)) || {}; }catch(e){ return {}; } },
-    saveAll(all){ localStorage.setItem(this.key, JSON.stringify(all)); document.dispatchEvent(new CustomEvent('chats:change')); },
-    getThread(vendorId){ return this.getAll()[vendorId] || []; },
-    addMessage(vendorId, msg){
-      const all = this.getAll();
-      if(!all[vendorId]) all[vendorId] = [];
-      all[vendorId].push(msg);
-      this.saveAll(all);
-    },
-    listConversationIds(){ const all = this.getAll(); return Object.keys(all).filter(id => all[id].length).map(idOf); }
-  };
-  window.ChatStore = ChatStore;
 
   /* ---------- WhatsApp helper ---------- */
-  function whatsappLink(vendor){
-    const session = VendorAuth.get();
-    const phone = (session && session.vendorId === vendor.id && session.verifiedPhone) ? session.verifiedPhone : vendor.phone;
-    const msg = encodeURIComponent(`שלום ${vendor.name}, מצאתי אתכם בביגי ספקים ורציתי לשאול לגבי זמינות ומחיר ל${vendor.tag}.`);
-    return `https://wa.me/${phone}?text=${msg}`;
+  function whatsappLink(vendor, message){
+    const msg = encodeURIComponent(message || `שלום ${vendor.name}, מצאתי אתכם בביגי ספקים ורציתי לשאול לגבי זמינות ומחיר ל${vendor.tag}.`);
+    return `https://wa.me/${vendor.phone}?text=${msg}`;
   }
   const whatsappIconSvg = `<svg viewBox="0 0 32 32" fill="currentColor" width="18" height="18"><path d="M16.03 3C9.13 3 3.53 8.6 3.53 15.5c0 2.36.65 4.56 1.78 6.45L3 29l7.24-2.26a12.4 12.4 0 0 0 5.79 1.44h.01c6.9 0 12.5-5.6 12.5-12.5S22.93 3 16.03 3zm0 22.6h-.01a10.4 10.4 0 0 1-5.3-1.45l-.38-.22-4.3 1.34 1.37-4.2-.25-.4a10.32 10.32 0 0 1-1.6-5.57c0-5.75 4.68-10.43 10.44-10.43 2.79 0 5.4 1.09 7.38 3.06a10.35 10.35 0 0 1 3.05 7.38c0 5.75-4.68 10.43-10.4 10.43zm5.72-7.82c-.31-.16-1.86-.92-2.15-1.02-.29-.1-.5-.16-.71.16-.21.31-.82 1.02-1 1.23-.19.21-.37.23-.68.08-.31-.16-1.32-.49-2.51-1.56-.93-.83-1.56-1.85-1.74-2.16-.18-.31-.02-.48.14-.63.14-.14.31-.37.47-.55.16-.19.21-.31.31-.52.1-.21.05-.39-.02-.55-.08-.16-.71-1.72-.98-2.36-.26-.62-.52-.54-.71-.55h-.6c-.21 0-.55.08-.84.39-.29.31-1.1 1.08-1.1 2.62 0 1.54 1.13 3.03 1.29 3.24.16.21 2.22 3.39 5.38 4.75.75.33 1.34.52 1.8.66.76.24 1.44.21 1.99.13.61-.09 1.86-.76 2.12-1.5.26-.73.26-1.36.18-1.5-.08-.13-.29-.21-.6-.37z"/></svg>`;
   const heartIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.6-4.6-10.2-9.6C.2 7.2 2.4 3.2 6.6 3.2c2.1 0 3.7 1.1 5.4 3 1.7-1.9 3.3-3 5.4-3 4.2 0 6.4 4 4.8 8.2C19.6 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>`;
@@ -246,16 +235,48 @@
     });
   }
 
-  /* ---------- Hidden admin shortcut (home) — only ever shown to a browser
-     that already holds a valid, whitelisted admin session; never a hint for
-     anyone else, since the link itself starts out `hidden` in the markup. ---------- */
-  function initAdminAccessLink(){
-    const links = $$('[data-admin-link]');
-    if(!links.length) return;
-    fetch('/admin-suppliers/session-status', { credentials: 'same-origin' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if(data?.isAdmin) links.forEach(l => l.hidden = false); })
-      .catch(() => {}); // e.g. running on the plain static server with no backend — stay hidden
+  /* ---------- Header: "התחברות" or the person's name with a menu.
+     Admin links start out hidden in the markup and only appear for an
+     account the server confirms is an admin. ---------- */
+  function renderAccountUI(user){
+    $$('[data-auth-guest]').forEach(el => el.hidden = !!user);
+    $$('[data-auth-user]').forEach(el => el.hidden = !user);
+    $$('[data-role-supplier]').forEach(el => el.hidden = !(user && user.role === 'supplier'));
+    $$('[data-admin-only]').forEach(el => el.hidden = !(user && user.isAdmin));
+    $$('[data-admin-confirm]').forEach(el => el.hidden = !(user && user.adminPending));
+    if(!user) return;
+    $$('.account-name').forEach(el => el.textContent = user.name);
+    $$('.account-btn').forEach(el => el.setAttribute('aria-label', `החשבון של ${user.name}`));
+    $$('.account-avatar').forEach(el => el.textContent = (user.name || '?').trim().charAt(0));
+    $$('.account-email').forEach(el => el.textContent = user.email || '');
+  }
+  document.addEventListener('account:change', () => renderAccountUI(Account.user));
+
+  function initAccountMenu(){
+    const menu = $('.account-menu');
+    if(!menu) return;
+    const btn = $('.account-btn', menu);
+    const dropdown = $('.account-dropdown', menu);
+    const setOpen = (open) => {
+      dropdown.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); setOpen(dropdown.hidden); });
+    document.addEventListener('click', (e) => { if(!dropdown.hidden && !menu.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !dropdown.hidden){ setOpen(false); btn.focus(); } });
+
+    $('[data-logout]', menu)?.addEventListener('click', async () => {
+      await Account.logout();
+      location.href = 'index.html';
+    });
+
+    const confirmBtn = $('[data-admin-confirm]', menu);
+    confirmBtn?.addEventListener('click', async () => {
+      confirmBtn.disabled = true;
+      const { ok, data } = await api('/api/auth/admin-confirmation', { method: 'POST' });
+      confirmBtn.textContent = ok ? '✓ נשלח קישור אישור (בתוקף ל־60 דקות)' : (data.error || 'השליחה נכשלה');
+      setTimeout(() => { confirmBtn.disabled = false; confirmBtn.textContent = '🔐 שליחת קישור לאישור הרשאות מנהל'; }, 5000);
+    });
   }
 
   /* ---------- Deals section (home) ---------- */
@@ -424,69 +445,85 @@
     render();
   }
 
-  /* ---------- Vendor-only / guest-only nav links + chat badge (shared) ---------- */
-  function syncAuthUI(){
-    const loggedIn = VendorAuth.isLoggedIn();
-    $$('[data-vendor-only]').forEach(el => el.hidden = !loggedIn);
-    $$('[data-guest-only]').forEach(el => el.hidden = loggedIn);
-  }
-  document.addEventListener('vendorauth:change', syncAuthUI);
-
-  /* ---------- Customer-only / customer-guest-only UI (shared) ---------- */
-  function syncCustomerAuthUI(){
-    const session = CustomerAuth.get();
-    const loggedIn = !!session;
-    $$('[data-customer-guest]').forEach(el => el.hidden = loggedIn);
-    $$('[data-customer-logged-in]').forEach(el => el.hidden = !loggedIn);
-    if(loggedIn) $$('.customer-name-slot').forEach(el => el.textContent = session.name);
-  }
-  document.addEventListener('customerauth:change', syncCustomerAuthUI);
-
-  function initCustomerLoginPage(){
-    const form = $('#customer-login-form');
+  /* ---------- Login / sign-up page ---------- */
+  function initLoginPage(){
+    const form = $('#auth-form');
     if(!form) return;
 
+    const params = new URLSearchParams(location.search);
+    const next = safeNext(params.get('next'));
+    const errorBox = $('#auth-error');
+    const submitBtn = $('#auth-submit');
+    const nameInput = $('#auth-name');
+    const confirmInput = $('#auth-confirm');
+    const passwordInput = $('#auth-password');
     let mode = 'login';
-    const tabs = $$('.auth-tab');
-    const nameField = $('#signup-name-field');
-    const confirmField = $('#signup-confirm-field');
-    const nameInput = $('#customer-login-name');
-    const confirmInput = $('#customer-login-confirm');
-    const submitBtn = $('#auth-submit-btn');
+
+    const showError = (message) => {
+      errorBox.textContent = message || '';
+      errorBox.hidden = !message;
+    };
 
     function setMode(m){
       mode = m;
-      tabs.forEach(t => t.classList.toggle('active', t.dataset.authTab === m));
-      if(nameField) nameField.hidden = m !== 'signup';
-      if(confirmField) confirmField.hidden = m !== 'signup';
-      if(nameInput) nameInput.required = m === 'signup';
-      if(confirmInput) confirmInput.required = m === 'signup';
-      if(submitBtn) submitBtn.textContent = m === 'signup' ? 'הרשמה' : 'התחברות';
-      $('#customer-login-password')?.setAttribute('autocomplete', m === 'signup' ? 'new-password' : 'current-password');
+      const signup = m === 'signup';
+      $$('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.authTab === m));
+      $('#signup-role-field').hidden = !signup;
+      $('#signup-name-field').hidden = !signup;
+      $('#signup-confirm-field').hidden = !signup;
+      $('#auth-switch-login').hidden = signup;
+      $('#auth-switch-signup').hidden = !signup;
+      nameInput.required = signup;
+      confirmInput.required = signup;
+      passwordInput.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+      submitBtn.textContent = signup ? 'יצירת חשבון' : 'התחברות';
+      showError('');
     }
-    tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.authTab)));
+    $$('[data-auth-tab]').forEach(t => t.addEventListener('click', () => setMode(t.dataset.authTab)));
 
-    form.addEventListener('submit', (e) => {
+    if(params.get('mode') === 'signup') setMode('signup');
+    const presetRole = $(`input[name="role"][value="${params.get('role')}"]`);
+    if(presetRole) presetRole.checked = true;
+
+    const goOn = (user) => {
+      if(next) location.href = next;
+      else if(user.role === 'supplier') location.href = 'dashboard.html';
+      else location.href = 'index.html';
+    };
+
+    // Already signed in when the page opened: nothing to do here.
+    let submitted = false;
+    Account.ready().then(user => { if(user && !submitted) goOn(user); });
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = $('#customer-login-email').value.trim();
-      const name = mode === 'signup'
-        ? (nameInput.value.trim() || 'משתמש חדש')
-        : (email.split('@')[0] || 'אורח');
-      CustomerAuth.login(name);
-      location.href = 'index.html';
-    });
+      submitted = true;
+      showError('');
+      if(mode === 'signup' && passwordInput.value !== confirmInput.value){
+        showError('הסיסמאות לא תואמות.');
+        confirmInput.focus();
+        return;
+      }
+      submitBtn.disabled = true;
+      const body = { email: $('#auth-email').value.trim(), password: passwordInput.value };
+      if(mode === 'signup'){
+        body.name = nameInput.value.trim();
+        body.role = $('input[name="role"]:checked').value;
+      }
+      const { ok, data } = await api(`/api/auth/${mode}`, { method: 'POST', json: body });
+      submitBtn.disabled = false;
+      if(!ok){ showError(data.error || 'משהו השתבש. נסו שוב.'); return; }
 
-    $('#google-auth-btn')?.addEventListener('click', () => {
-      CustomerAuth.login('משתמש Google');
-      location.href = 'index.html';
+      Account.set(data.user);
+      if(mode === 'signup' && data.user.adminPending){
+        $('#auth-panel').hidden = true;
+        $('#admin-pending-email').textContent = data.user.email;
+        $('#admin-pending-notice').hidden = false;
+        return;
+      }
+      goOn(data.user);
     });
   }
-
-  function renderChatBadge(){
-    const count = ChatStore.listConversationIds().length;
-    $$('.nav-chat-count').forEach(el => { el.textContent = count; el.hidden = count === 0; });
-  }
-  document.addEventListener('chats:change', renderChatBadge);
 
   /* ---------- Vendors listing page ---------- */
   function initVendorsPage(){
@@ -679,22 +716,10 @@
         <h4>${p.name}</h4>
         <div class="package-price">₪${p.price.toLocaleString('he-IL')}<span> / לאירוע</span></div>
         <ul>${p.items.map(it=>`<li>${it}</li>`).join('')}</ul>
-        <button class="btn ${i===1?'btn-primary':'btn-secondary'} btn-block" data-pick-package="${p.name}" data-pick-price="${p.price}">בחרו חבילה</button>
+        <a class="btn ${i===1?'btn-primary':'btn-secondary'} btn-block" target="_blank" rel="noopener"
+           href="${esc(whatsappLink(v, `שלום ${v.name}, מצאתי אתכם בביגי ספקים ואני מעוניין/ת ב${p.name} (${formatPrice(p.price)}) לאירוע שלי. מה הזמינות שלכם?`))}">בחרו חבילה בוואטסאפ</a>
       </div>
     `).join('');
-    $$('[data-pick-package]', packagesGrid).forEach(btn => {
-      btn.addEventListener('click', () => {
-        if(ChatStore.getThread(v.id).length === 0){
-          ChatStore.addMessage(v.id, { from:'vendor', text:`שלום! תודה שפניתם ל${v.name} 👋 איך אפשר לעזור?`, time: Date.now() - 1000 });
-        }
-        ChatStore.addMessage(v.id, {
-          from: 'user',
-          text: `שלום! מעוניין/ת ב${btn.dataset.pickPackage} (₪${parseInt(btn.dataset.pickPrice).toLocaleString('he-IL')}) לאירוע שלי. מה הזמינות שלכם?`,
-          time: Date.now()
-        });
-        location.href = `chat.html?id=${v.id}`;
-      });
-    });
 
     // Reviews
     const reviewsList = $('#reviews-list');
@@ -724,10 +749,6 @@
     waBtn.href = whatsappLink(v);
     waBtn.innerHTML = whatsappIconSvg + '<span>צרו קשר בוואטסאפ</span>';
 
-    // In-site chat CTA
-    const chatBtn = $('#profile-chat-btn');
-    if(chatBtn) chatBtn.href = `chat.html?id=${v.id}`;
-
     // Floating compare button
     const floatBtn = $('#floating-compare');
     function syncFloat(){
@@ -756,335 +777,131 @@
     renderCompareUI();
   }
 
-  /* ---------- Join page: category picker + form ---------- */
+  /* ---------- Supplier sign-up form (same fields as the admin "create profile" form) ---------- */
+  const MIN_PRODUCT_IMAGES = 5;
+  const MAX_PRODUCT_IMAGES = 10;
+
   function initJoinPage(){
-    const grid = $('#cat-picker-grid');
-    if(!grid) return;
-    grid.innerHTML = CATEGORIES.map(c => `
-      <div class="cat-pick" data-cat="${c.id}">
-        <div class="icon">${c.icon}</div>
-        <span>${c.name}</span>
-      </div>
-    `).join('');
-    let selected = new Set();
-    $$('.cat-pick', grid).forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.dataset.cat;
-        if(selected.has(id)){ selected.delete(id); el.classList.remove('selected'); }
-        else { selected.add(id); el.classList.add('selected'); }
-      });
-    });
-
-    // Media upload (required) — photos/videos of past work
-    const fileInput = $('#media-upload');
-    const fileList = $('#media-upload-list');
-    const dropzone = $('#media-dropzone');
-    if(fileInput){
-      fileInput.addEventListener('change', () => {
-        const files = Array.from(fileInput.files || []);
-        dropzone?.classList.toggle('has-files', files.length > 0);
-        if(fileList) fileList.innerHTML = files.map(f => `<span class="upload-chip">${f.type.startsWith('video') ? '🎬' : '📷'} ${f.name}</span>`).join('');
-      });
-    }
-
-    const form = $('#join-form');
-    form?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      form.style.display = 'none';
-      $('#form-success').classList.add('show');
-      // Demo: joining logs you in as a vendor so you can explore the dashboard
-      VendorAuth.login(listedVendors()[0]);
-    });
-  }
-
-  /* ---------- Vendor dashboard ---------- */
-  function initDashboard(){
-    const root = $('#dashboard-page');
-    const locked = $('#dashboard-locked');
-    if(!root) return;
-
-    if(!VendorAuth.isLoggedIn()){
-      root.hidden = true;
-      if(locked) locked.hidden = false;
-      return;
-    }
-    root.hidden = false;
-    if(locked) locked.hidden = true;
-
-    $('#dash-logout')?.addEventListener('click', () => {
-      VendorAuth.logout();
-      location.href = 'index.html';
-    });
-
-    const session = VendorAuth.get();
-    const vendor = findVendor(session.vendorId) || listedVendors()[0];
-    if(!vendor){
-      root.hidden = true;
-      if(locked) locked.hidden = false;
-      return;
-    }
-
-    $('#dash-vendor-name').textContent = vendor.name;
-    $('#dash-vendor-emoji').textContent = vendor.emoji;
-
-    // Stats cards
-    $('#dash-stats-grid').innerHTML = DASHBOARD_STATS.map(s => `
-      <div class="dash-stat-card reveal">
-        <div class="icon ${s.grad}">${s.icon}</div>
-        <strong data-count data-target="${s.value}" data-decimals="${s.decimals||0}" data-suffix="${s.suffix}">0</strong>
-        <div class="dash-stat-label">${s.label}</div>
-        <div class="delta">${s.delta}</div>
-      </div>
-    `).join('');
-    const statIo = new IntersectionObserver((entries, obs) => {
-      entries.forEach(entry => {
-        if(entry.isIntersecting){
-          entry.target.classList.add('in-view');
-          const num = entry.target.querySelector('[data-count]');
-          if(num) animateCount(num, parseFloat(num.dataset.target), parseInt(num.dataset.decimals), num.dataset.suffix);
-          obs.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.4 });
-    $$('.dash-stat-card', $('#dash-stats-grid')).forEach(el => statIo.observe(el));
-
-    // Weekly chart
-    const maxVal = Math.max(...WEEKLY_VIEWS.map(d => d.value));
-    const chart = $('#weekly-chart');
-    chart.innerHTML = WEEKLY_VIEWS.map(d => `
-      <div class="chart-bar-col">
-        <div class="chart-bar-track"><div class="chart-bar" style="height:${Math.round((d.value/maxVal)*100)}%"></div></div>
-        <span>${d.day}</span>
-      </div>
-    `).join('');
-    const chartIo = new IntersectionObserver((entries, obs) => {
-      entries.forEach(entry => {
-        if(entry.isIntersecting){ entry.target.classList.add('in-view'); obs.unobserve(entry.target); }
-      });
-    }, { threshold: 0.3 });
-    $$('.chart-bar-col', chart).forEach(el => chartIo.observe(el));
-
-    // Leads
-    function renderLeads(){
-      $('#leads-list').innerHTML = LEADS.map(l => `
-        <div class="lead-item">
-          <div class="lead-avatar">${l.initials}</div>
-          <div class="lead-body">
-            <div class="lead-top"><span class="lead-name">${l.name}</span><span class="lead-time">${l.time}</span></div>
-            <div class="lead-meta">${l.eventType} · ${l.date}</div>
-            <p class="lead-message">${l.message}</p>
-            <div class="lead-actions">
-              <span class="lead-status ${l.status === 'חדש' ? 'new' : 'answered'}">${l.status}</span>
-              ${l.status === 'חדש' ? `<button class="btn btn-ghost btn-sm" data-mark-answered="${l.id}">סמנו כנענה</button>` : ''}
-              <a href="tel:+972500000000" class="btn btn-secondary btn-sm">התקשרו</a>
-            </div>
-          </div>
-        </div>
-      `).join('');
-      $$('[data-mark-answered]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const lead = LEADS.find(l => l.id === parseInt(btn.dataset.markAnswered));
-          if(lead){ lead.status = 'נענה'; renderLeads(); }
-        });
-      });
-    }
-    renderLeads();
-
-    // Reviews (reuse global REVIEWS)
-    $('#dash-reviews-list').innerHTML = REVIEWS.map(r => `
-      <div class="review-item">
-        <div class="review-top">
-          <span class="review-name">${r.name}</span>
-          <span class="review-days">לפני ${r.days} ימים</span>
-        </div>
-        <div class="stars" style="margin-bottom:6px;">${starsHtml(r.rating)}</div>
-        <p class="review-text">${r.text}</p>
-      </div>
-    `).join('');
-
-    // Profile completion checklist (with localStorage overrides, e.g. phone verification)
-    const PHONE_LABEL = 'אימות מספר טלפון';
-    function renderChecklist(){
-      const overrides = ChecklistStore.get();
-      const currentSession = VendorAuth.get() || session;
-      const items = PROFILE_CHECKLIST.map(i => ({ ...i, done: overrides[i.label] !== undefined ? overrides[i.label] : i.done }));
-      const doneCount = items.filter(i => i.done).length;
-      const pct = Math.round((doneCount / items.length) * 100);
-      $('#progress-pct').textContent = pct + '%';
-      requestAnimationFrame(() => { $('#progress-fill').style.width = pct + '%'; });
-
-      $('#checklist').innerHTML = items.map(i => `
-        <div class="checklist-item ${i.done ? 'done' : ''}">
-          <span class="dot">${i.done ? '✓' : ''}</span>
-          <span class="checklist-label">${i.label}${i.label === PHONE_LABEL && i.done && currentSession.verifiedPhone ? ` (${currentSession.verifiedPhone})` : ''}</span>
-          ${(!i.done && i.label === PHONE_LABEL) ? `<button class="checklist-verify-btn" id="open-phone-verify">אמתו עכשיו</button>` : ''}
-        </div>
-      `).join('') + `
-        <div class="phone-verify-panel" id="phone-verify-panel" hidden>
-          <input type="tel" id="phone-verify-input" placeholder="050-1234567" autocomplete="tel">
-          <button class="btn btn-primary btn-sm" id="phone-verify-submit">אמתו</button>
-        </div>
-      `;
-
-      $('#open-phone-verify')?.addEventListener('click', () => {
-        $('#phone-verify-panel').hidden = false;
-        $('#phone-verify-input')?.focus();
-      });
-      $('#phone-verify-submit')?.addEventListener('click', () => {
-        const raw = $('#phone-verify-input').value.trim();
-        if(!raw){ $('#phone-verify-input').focus(); return; }
-        const digits = raw.replace(/\D/g,'');
-        const normalized = digits.startsWith('972') ? digits : '972' + digits.replace(/^0/, '');
-        VendorAuth.setVerifiedPhone(normalized);
-        ChecklistStore.setDone(PHONE_LABEL, true);
-        renderChecklist();
-      });
-    }
-    renderChecklist();
-
-    // Packages mini list
-    $('#pkg-mini-list').innerHTML = PACKAGES.events.map(p => `
-      <div class="pkg-mini">
-        <span class="pkg-mini-name">${p.name}</span>
-        <span class="pkg-mini-price">₪${p.price.toLocaleString('he-IL')}</span>
-      </div>
-    `).join('');
-  }
-
-  /* ---------- Vendor login (demo) ---------- */
-  function initLoginPage(){
-    const form = $('#login-form');
+    const form = $('#supplier-form');
     if(!form) return;
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      VendorAuth.login(listedVendors()[0]);
-      location.href = 'dashboard.html';
+
+    const show = (id) => {
+      ['join-loading', 'join-guest', 'join-customer', 'join-done'].forEach(s => $('#' + s).hidden = s !== id);
+      form.hidden = id !== 'form';
+    };
+    const showDone = (profile) => {
+      $('#join-done-text').textContent = profile.published
+        ? `הפרופיל "${profile.name}" כבר מופיע באתר.`
+        : `הפרופיל "${profile.name}" התקבל וממתין לאישור של הצוות שלנו. ברגע שיאושר, הוא יופיע באתר — הסטטוס מופיע בלוח הבקרה שלכם.`;
+      show('join-done');
+    };
+
+    $('#sf-category').innerHTML = '<option value="">בחרו קטגוריה</option>' +
+      CATEGORIES.map(c => `<option value="${esc(c.id)}">${esc(c.icon)} ${esc(c.name)}</option>`).join('');
+    $('#sf-city').innerHTML = '<option value="">בחרו עיר (לא חובה)</option>' +
+      CITIES.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+    // One block per photo: the file and its caption stay together.
+    const rows = $('#product-photo-rows');
+    const addBtn = $('#add-photo-row-btn');
+    function addRow(removable){
+      const row = document.createElement('div');
+      row.className = 'product-photo-row';
+      row.innerHTML = `
+        <div class="product-photo-fields">
+          <label class="product-photo-label"></label>
+          <input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>
+          <input type="text" name="productCaptions" required maxlength="200" placeholder="מה רואים בתמונה הזו?" class="photo-caption-input">
+        </div>
+        ${removable ? '<button type="button" class="remove-row-btn" aria-label="הסרת תמונה">✕</button>' : ''}`;
+      rows.appendChild(row);
+      renumber();
+    }
+    function renumber(){
+      const all = $$('.product-photo-row', rows);
+      all.forEach((row, i) => { $('.product-photo-label', row).textContent = `תמונה ${i + 1}`; });
+      addBtn.hidden = all.length >= MAX_PRODUCT_IMAGES;
+    }
+    for(let i = 0; i < MIN_PRODUCT_IMAGES; i++) addRow(false);
+    addBtn.addEventListener('click', () => { if($$('.product-photo-row', rows).length < MAX_PRODUCT_IMAGES) addRow(true); });
+    rows.addEventListener('click', (e) => {
+      const btn = e.target.closest('.remove-row-btn');
+      if(btn){ btn.closest('.product-photo-row').remove(); renumber(); }
     });
-    $('#google-vendor-auth-btn')?.addEventListener('click', () => {
-      VendorAuth.login(listedVendors()[0]);
-      location.href = 'dashboard.html';
+
+    const errorBox = $('#supplier-form-error');
+    const submitBtn = $('#supplier-form-submit');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שולח ומעלה תמונות…';
+      const { ok, data } = await api('/api/supplier/profile', { method: 'POST', formData: new FormData(form) });
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שליחת הפרופיל לאישור';
+      if(ok){ showDone(data.profile); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      if(data.error === 'כבר שלחתם פרופיל.'){ location.href = 'dashboard.html'; return; }
+      errorBox.textContent = data.error || 'השליחה נכשלה. נסו שוב.';
+      errorBox.hidden = false;
+      errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+
+    Account.ready().then(async (user) => {
+      if(!user) return show('join-guest');
+      if(user.role !== 'supplier') return show('join-customer');
+      const { ok, data } = await api('/api/supplier/profile');
+      if(ok && data.profile) return showDone(data.profile);
+      show('form');
     });
   }
 
-  /* ---------- In-site chat page (inbox + thread) ---------- */
-  function initChatPage(){
-    const layout = $('#chat-layout');
-    if(!layout) return;
+  /* ---------- Supplier dashboard (real data only) ---------- */
+  function initDashboard(){
+    const panel = $('#dash-profile');
+    if(!panel) return;
 
-    const VENDOR_REPLIES = [
-      'תודה שפניתם! נבדוק זמינות ונחזור אליכם בהקדם 🙌',
-      'שמחים לעזור! אילו פרטים תוכלו לשתף לגבי האירוע?',
-      'בהחלט אפשרי, אשלח הצעת מחיר מסודרת בהקדם.',
-      'תודה על הפנייה, ניצור קשר בקרוב עם כל הפרטים.',
-    ];
+    const states = ['dash-loading', 'dash-guest', 'dash-customer', 'dash-no-profile', 'dash-profile'];
+    const show = (id) => states.forEach(s => $('#' + s).hidden = s !== id);
 
-    const params = new URLSearchParams(location.search);
-    let activeId = params.get('id') ? idOf(params.get('id')) : null;
+    function renderProfile(p){
+      $('#dash-status-badge').textContent = p.published ? '✓ פעיל באתר' : '⏳ ממתין לאישור';
+      $('#dash-status-badge').classList.toggle('is-live', p.published);
+      $('#dash-status-text').textContent = p.published
+        ? 'הפרופיל שלכם מופיע באתר ולקוחות יכולים למצוא אתכם.'
+        : 'הצוות שלנו יעבור על הפרופיל. ברגע שיאושר, הוא יופיע באתר.';
+      $('#dash-view-link').href = p.viewUrl;
 
-    function timeAgo(ts){
-      const mins = Math.floor((Date.now() - ts) / 60000);
-      if(mins < 1) return 'עכשיו';
-      if(mins < 60) return `לפני ${mins} דק'`;
-      const hrs = Math.floor(mins / 60);
-      if(hrs < 24) return `לפני ${hrs} שע'`;
-      return `לפני ${Math.floor(hrs / 24)} ימים`;
+      $('#dash-cover').style.backgroundImage = `url('${encodeURI(p.backgroundImage).replace(/'/g, '%27')}')`;
+      $('#dash-profile-name').textContent = p.name;
+      $('#dash-profile-meta').textContent = [p.categoryLabel, p.city].filter(Boolean).join(' · ');
+      $('#dash-profile-description').textContent = p.description;
+      $('#dash-profile-description').hidden = !p.description;
+
+      const details = [
+        ['טלפון לוואטסאפ', p.phone],
+        ['מייל ליצירת קשר', p.contactEmail],
+        ['קישורים', p.links],
+        ['נשלח בתאריך', new Date(p.createdAt).toLocaleDateString('he-IL')],
+      ];
+      $('#dash-details').innerHTML = details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="muted">לא הוזן</span>'}</dd></div>`).join('');
+
+      $('#dash-photos').innerHTML = p.productImages.map(img => `
+        <figure class="dash-photo">
+          <img src="${esc(img.file)}" alt="${esc(img.caption)}" loading="lazy">
+          <figcaption>${esc(img.caption)}</figcaption>
+        </figure>`).join('');
     }
 
-    function seedIfEmpty(vendorId){
-      const vendor = VENDORS.find(v => v.id === vendorId);
-      if(vendor && ChatStore.getThread(vendorId).length === 0){
-        ChatStore.addMessage(vendorId, { from:'vendor', text:`שלום! תודה שפניתם ל${vendor.name} 👋 איך אפשר לעזור?`, time: Date.now() });
-      }
-    }
-
-    function renderInbox(){
-      const ids = ChatStore.listConversationIds();
-      const list = $('#chat-conversations');
-      const empty = $('#chat-inbox-empty');
-      if(ids.length === 0){
-        list.innerHTML = '';
-        if(empty) empty.hidden = false;
-        return;
-      }
-      if(empty) empty.hidden = true;
-      const rows = ids.map(id => {
-        const v = VENDORS.find(x => x.id === id);
-        const thread = ChatStore.getThread(id);
-        return v && thread.length ? { v, last: thread[thread.length - 1] } : null;
-      }).filter(Boolean).sort((a,b) => b.last.time - a.last.time);
-
-      list.innerHTML = rows.map(({v,last}) => `
-        <div class="chat-conv-item ${activeId===v.id?'active':''}" data-conv="${v.id}">
-          <div class="chat-conv-avatar ${v.grad}">${v.emoji}</div>
-          <div style="min-width:0; flex:1;">
-            <div class="chat-conv-top"><span class="chat-conv-name">${v.name}</span><span class="chat-conv-time">${timeAgo(last.time)}</span></div>
-            <div class="chat-conv-preview">${last.from==='user'?'אתם: ':''}${esc(last.text)}</div>
-          </div>
-        </div>
-      `).join('');
-      $$('.chat-conv-item', list).forEach(el => {
-        el.addEventListener('click', () => openThread(idOf(el.dataset.conv)));
-      });
-      renderChatBadge();
-    }
-
-    function renderMessages(vendorId){
-      const thread = ChatStore.getThread(vendorId);
-      const box = $('#chat-messages');
-      box.innerHTML = thread.map(m => `
-        <div class="chat-bubble ${m.from}">${esc(m.text)}<span class="time">${new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span></div>
-      `).join('');
-      box.scrollTop = box.scrollHeight;
-    }
-
-    function openThread(vendorId){
-      const v = VENDORS.find(x => x.id === vendorId);
-      if(!v) return;
-      activeId = vendorId;
-      seedIfEmpty(vendorId);
-      $('#chat-thread-empty').hidden = true;
-      $('#chat-thread-active').hidden = false;
-      $('#chat-thread-avatar').textContent = v.emoji;
-      $('#chat-thread-avatar').className = 'chat-thread-avatar ' + v.grad;
-      $('#chat-thread-name').textContent = v.name;
-      $('#chat-thread-profile-link').href = `vendor.html?id=${v.id}`;
-      layout.classList.add('thread-open');
-      renderMessages(vendorId);
-      renderInbox();
-      history.replaceState(null, '', `chat.html?id=${vendorId}`);
-    }
-
-    $('#chat-back-btn')?.addEventListener('click', () => {
-      layout.classList.remove('thread-open');
-      activeId = null;
-      history.replaceState(null, '', 'chat.html');
-      renderInbox();
+    Account.ready().then(async (user) => {
+      if(!user) return show('dash-guest');
+      if(user.role !== 'supplier') return show('dash-customer');
+      $('#dash-title').textContent = `שלום, ${user.name}`;
+      const { ok, data } = await api('/api/supplier/profile');
+      if(!ok) return show('dash-guest');
+      if(!data.profile) return show('dash-no-profile');
+      renderProfile(data.profile);
+      show('dash-profile');
     });
-
-    $('#chat-input-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      if(!activeId) return;
-      const input = $('#chat-input');
-      const text = input.value.trim();
-      if(!text) return;
-      ChatStore.addMessage(activeId, { from:'user', text, time: Date.now() });
-      input.value = '';
-      renderMessages(activeId);
-      renderInbox();
-
-      const typing = $('#chat-typing');
-      typing.hidden = false;
-      setTimeout(() => {
-        typing.hidden = true;
-        const reply = VENDOR_REPLIES[Math.floor(Math.random() * VENDOR_REPLIES.length)];
-        ChatStore.addMessage(activeId, { from:'vendor', text: reply, time: Date.now() });
-        renderMessages(activeId);
-        renderInbox();
-      }, 1400);
-    });
-
-    renderInbox();
-    if(activeId) openThread(activeId);
   }
 
   /* ---------- Testimonial/live stats ticker on home (orders count) ---------- */
@@ -1100,9 +917,11 @@
 
   /* ---------- Init ---------- */
   document.addEventListener('DOMContentLoaded', () => {
+    const hint = Account.hint();
+    if(hint) renderAccountUI({ ...hint, isAdmin: false });
+    initAccountMenu();
     initCategories();
     initHeroSearch();
-    initAdminAccessLink();
     initDeals();
     initCarousel();
     initStats();
@@ -1112,20 +931,11 @@
     initDashboard();
     initFavoritesPage();
     initLoginPage();
-    initCustomerLoginPage();
-    initChatPage();
     initLiveTicker();
     renderCompareUI();
     renderFavoritesUI();
-    syncAuthUI();
-    syncCustomerAuthUI();
-    renderChatBadge();
     initReveal();
-
-    $('#customer-account-pill')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      CustomerAuth.logout();
-    });
+    Account.refresh();
   });
 
 })();

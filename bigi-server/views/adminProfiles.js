@@ -21,7 +21,7 @@ function createdRow(row) {
       <div class="profile-info">
         <div class="profile-name">${escapeHtml(row.name)}</div>
         <div class="profile-meta">${meta}</div>
-        ${row.createdBy ? `<div class="profile-meta">על ידי ${escapeHtml(row.createdBy)}</div>` : ''}
+        ${row.createdBy ? `<div class="profile-meta">${row.fromSupplier ? 'נשלח על ידי הספק' : 'נוצר על ידי'} ${escapeHtml(row.createdBy)}</div>` : ''}
         <div class="profile-links">
           <a href="${escapeHtml(row.viewUrl)}" target="_blank" rel="noopener">צפייה ↗</a>
           <button type="button" data-copy="${escapeHtml(row.viewUrl)}">העתקת קישור</button>
@@ -47,8 +47,8 @@ function sampleRow(row) {
     </div>`;
 }
 
-function profilesPage({ adminEmail, created, samples }) {
-  const all = [...created, ...samples];
+function profilesPage({ adminEmail, fromSuppliers, created, samples }) {
+  const all = [...fromSuppliers, ...created, ...samples];
   const liveCount = all.filter((r) => r.published).length;
 
   const body = `
@@ -65,6 +65,11 @@ function profilesPage({ adminEmail, created, samples }) {
         <button type="button" data-filter="demo">דמו (<span data-count="demo">${all.length - liveCount}</span>)</button>
         <button type="button" data-filter="live">פעילים באתר (<span data-count="live">${liveCount}</span>)</button>
       </div>
+
+      <h2 class="profiles-group-title">פרופילים שספקים שלחו <small>(${fromSuppliers.length}) — מופיעים באתר רק אחרי שתפעילו אותם</small></h2>
+      ${fromSuppliers.length
+        ? fromSuppliers.map(createdRow).join('')
+        : `<div class="empty-profiles">עדיין אף ספק לא שלח פרופיל דרך "הצטרפות כספק".</div>`}
 
       <h2 class="profiles-group-title">פרופילים שנוצרו באזור הניהול <small>(${created.length})</small></h2>
       ${created.length

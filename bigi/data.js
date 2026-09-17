@@ -61,38 +61,3 @@ const STATS = [
   { value: 18500, suffix: "+", label: "אירועים מוצלחים" },
   { value: 4.8, suffix: "★", label: "דירוג ממוצע", decimals: 1 },
 ];
-
-/* ---------- Vendor dashboard demo data ---------- */
-
-const DASHBOARD_STATS = [
-  { icon: "👁️", grad: "g1", value: 1240, suffix: "+", label: "צפיות בפרופיל החודש", delta: "+12% מהחודש שעבר" },
-  { icon: "💬", grad: "g2", value: 34,   suffix: "",  label: "פניות חדשות",           delta: "+5 השבוע" },
-  { icon: "📅", grad: "g3", value: 18,   suffix: "",  label: "הזמנות מאושרות",        delta: "+3 החודש" },
-  { icon: "⭐", grad: "g4", value: 4.9,  suffix: "",  label: "דירוג ממוצע", decimals: 1, delta: "מתוך 289 ביקורות" },
-];
-
-const WEEKLY_VIEWS = [
-  { day: "א'", value: 62 },
-  { day: "ב'", value: 88 },
-  { day: "ג'", value: 74 },
-  { day: "ד'", value: 120 },
-  { day: "ה'", value: 95 },
-  { day: "ו'", value: 150 },
-  { day: "ש'", value: 40 },
-];
-
-const LEADS = [
-  { id: 1, name: "מיכל אברהם",  initials: "מא", eventType: "חתונה",     date: "12.10.2026", message: "שלום, רציתי לבדוק זמינות לתאריך ומחיר לחבילת פרימיום. כמה זמן מראש כדאי לסגור?", status: "חדש",  time: "לפני שעתיים" },
-  { id: 2, name: "דני כהן",     initials: "דכ", eventType: "בר מצווה",  date: "03.11.2026", message: "מתעניין בשירותים שלכם, אפשר לקבל הצעת מחיר לאירוע של כ־120 אורחים?",              status: "חדש",  time: "לפני 5 שעות" },
-  { id: 3, name: "רותם לוי",    initials: "רל", eventType: "יום הולדת", date: "20.09.2026", message: "תודה על המענה המהיר! נדבר השבוע לגבי הפרטים הסופיים.",                            status: "נענה", time: "אתמול" },
-  { id: 4, name: "עומר שי",     initials: "עש", eventType: "חתונה",     date: "15.12.2026", message: "האם אתם זמינים לתאריך הזה? מחפשים גם ציוד תאורה נוסף לחצר.",                       status: "נענה", time: "לפני יומיים" },
-  { id: 5, name: "נועה גל",     initials: "נג", eventType: "אירוע חברה", date: "02.10.2026", message: "שלום, אנחנו מתכננים ערב גיבוש חברה ורצינו לשמוע פרטים ומחיר.",                     status: "חדש",  time: "לפני יום" },
-];
-
-const PROFILE_CHECKLIST = [
-  { label: "פרטי עסק בסיסיים", done: true },
-  { label: "תמונות גלריה (לפחות 5)", done: true },
-  { label: "חבילות ומחירים", done: true },
-  { label: "סרטון תדמית", done: false },
-  { label: "אימות מספר טלפון", done: false },
-];

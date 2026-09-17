@@ -14,13 +14,20 @@ function waLink(phone, name) {
   return `https://wa.me/${intl}?text=${msg}`;
 }
 
-function supplierViewPage(supplier) {
+function supplierViewPage(supplier, { baseUrl }) {
   const {
     name, category, city, description, phone, contactEmail, links,
     backgroundImage, productImages,
   } = supplier;
 
   const categoryLabel = categoryById(category)?.name || category;
+  // Link previews (WhatsApp etc.) need absolute image URLs; local-dev uploads are relative.
+  const absolute = (url) => (/^https?:\/\//i.test(url) ? url : `${baseUrl}${url}`);
+  const shareImage = backgroundImage ? absolute(backgroundImage) : `${baseUrl}/og-image.jpg`;
+  const shareSummary = [categoryLabel, city].filter(Boolean).join(' · ');
+  const shareDescription = description
+    ? (description.length > 150 ? `${description.slice(0, 150)}…` : description)
+    : `${shareSummary} — בביגי ספקים`;
   const whatsapp = waLink(phone, name);
   // Only http(s) links are clickable; a bare "instagram.com/x" gets https:// added.
   const linkHref = !links ? null
@@ -40,7 +47,16 @@ function supplierViewPage(supplier) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛍️</text></svg>">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="ביגי ספקים">
+<meta property="og:locale" content="he_IL">
+<meta property="og:title" content="${escapeHtml(shareSummary ? `${name} — ${shareSummary}` : name)}">
+<meta property="og:description" content="${escapeHtml(shareDescription)}">
+<meta property="og:image" content="${escapeHtml(shareImage)}">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* Full-viewport, fixed background photo — this is the page's background,
      not just the hero's. Blurred + darkened so text on top (and the glass

@@ -1,8 +1,6 @@
 const { page, adminTabs, escapeHtml } = require('./layout');
 const { CATEGORIES, CITIES } = require('../lib/siteData');
-
-const MIN_PRODUCT_IMAGES = 5;
-const MAX_PRODUCT_IMAGES = 10;
+const { MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES } = require('../lib/supplierProfile');
 
 function photoRow(n, removable) {
   return `

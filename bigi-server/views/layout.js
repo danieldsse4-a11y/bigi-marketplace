@@ -105,4 +105,16 @@ ${body}
 </html>`;
 }
 
-module.exports = { page, adminTabs, escapeHtml };
+// A simple centered message (errors, confirmations) in the admin look.
+function messagePage({ title, heading, text, linkHref, linkLabel, isError = false }) {
+  const body = `
+    <div class="admin-card" style="text-align:center;">
+      <div style="font-size:48px; margin-bottom:10px;">${isError ? '⚠️' : '✅'}</div>
+      <h1>${escapeHtml(heading)}</h1>
+      <p class="lead">${escapeHtml(text)}</p>
+      ${linkHref ? `<a href="${escapeHtml(linkHref)}" class="btn btn-primary">${escapeHtml(linkLabel)}</a>` : ''}
+    </div>`;
+  return page({ title, body });
+}
+
+module.exports = { page, adminTabs, messagePage, escapeHtml };

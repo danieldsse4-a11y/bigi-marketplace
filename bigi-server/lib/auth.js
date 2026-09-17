@@ -1,20 +1,25 @@
-// Whitelist + magic-link + session handling for the hidden admin area.
+// Accounts, sessions and admin rights.
 //
 // Security model:
-//  - Only the emails in ADMIN_EMAILS may ever get a session.
-//  - The whitelist is re-checked on EVERY request via requireAdmin, not just
-//    at login — so removing an email from .env immediately revokes access
-//    for anyone still holding an old session cookie.
-//  - Sessions and one-time magic-link tokens are stored server-side (in the
-//    JSON db), not just trusted from a signed cookie — the cookie only ever
-//    carries an opaque random id.
+//  - Passwords are stored as scrypt hashes, never in plain text.
+//  - The session cookie only carries an opaque random id; sessions live
+//    server-side in the stored db.
+//  - Admin rights = the account's email is in ADMIN_EMAILS *and* the owner of
+//    that inbox clicked a one-time confirmation link. Without the link, anyone
+//    who signed up first with an admin email would become an admin.
+//  - The whitelist is re-checked on every request, so removing an email from
+//    ADMIN_EMAILS revokes access immediately.
 
 const crypto = require('crypto');
+const { promisify } = require('util');
 const { load, withDb } = require('./db');
 
-const SESSION_COOKIE = 'bigi_admin_session';
-const MAGIC_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const scrypt = promisify(crypto.scrypt);
+
+const SESSION_COOKIE = 'bigi_session';
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ADMIN_VERIFY_TTL_MS = 60 * 60 * 1000;
+const ROLES = ['customer', 'supplier'];
 
 function getWhitelist() {
   return (process.env.ADMIN_EMAILS || '')
@@ -23,41 +28,79 @@ function getWhitelist() {
     .filter(Boolean);
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function isWhitelisted(email) {
-  if (!email) return false;
-  return getWhitelist().includes(String(email).trim().toLowerCase());
+  return Boolean(email) && getWhitelist().includes(normalizeEmail(email));
 }
 
-async function createMagicToken(email) {
-  const token = crypto.randomBytes(32).toString('hex');
-  await withDb((db) => {
-    db.magicTokens[token] = {
-      email: email.trim().toLowerCase(),
-      expiresAt: Date.now() + MAGIC_TOKEN_TTL_MS,
-      used: false,
-    };
-  });
-  return token;
+async function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = await scrypt(password, salt, 64);
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
 }
 
-// Returns the email on success, or null if the token is missing/expired/used.
-async function consumeMagicToken(token) {
+const DUMMY_HASH = `${'0'.repeat(32)}:${'0'.repeat(128)}`;
+
+async function passwordMatches(password, stored) {
+  const [saltHex, hashHex] = String(stored || DUMMY_HASH).split(':');
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length);
+  return stored ? crypto.timingSafeEqual(expected, actual) : false;
+}
+
+function findUserByEmail(db, email) {
+  const wanted = normalizeEmail(email);
+  return Object.values(db.users).find((u) => u.email === wanted) || null;
+}
+
+function isAdminUser(user) {
+  return Boolean(user && user.adminVerifiedAt && isWhitelisted(user.email));
+}
+
+// What the browser is allowed to know about the signed-in account.
+function publicUser(user) {
+  if (!user) return null;
+  return {
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isAdmin: isAdminUser(user),
+    adminPending: isWhitelisted(user.email) && !user.adminVerifiedAt,
+  };
+}
+
+async function createUser({ name, email, password, role }) {
+  const passwordHash = await hashPassword(password);
   return withDb((db) => {
-    const entry = db.magicTokens[token];
-    if (!entry) return null;
-    if (entry.used || Date.now() > entry.expiresAt) return null;
-    entry.used = true;
-    return entry.email;
+    if (findUserByEmail(db, email)) return null;
+    const user = {
+      id: crypto.randomUUID(),
+      name,
+      email: normalizeEmail(email),
+      role,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+    };
+    db.users[user.id] = user;
+    return user;
   });
 }
 
-async function createSession(email) {
+// Returns the user for correct credentials, otherwise null (same answer for
+// "no such email" and "wrong password").
+async function authenticate(email, password) {
+  const user = findUserByEmail(load(), email);
+  const ok = await passwordMatches(password, user?.passwordHash);
+  return ok ? user : null;
+}
+
+async function createSession(userId) {
   const sessionId = crypto.randomBytes(32).toString('hex');
   await withDb((db) => {
-    db.sessions[sessionId] = {
-      email: email.trim().toLowerCase(),
-      expiresAt: Date.now() + SESSION_TTL_MS,
-    };
+    db.sessions[sessionId] = { userId, expiresAt: Date.now() + SESSION_TTL_MS };
   });
   return sessionId;
 }
@@ -68,37 +111,85 @@ async function destroySession(sessionId) {
   });
 }
 
-// The admin email behind this request's session cookie, or null. Checks the
-// session is live AND the email is still whitelisted right now.
-function adminEmailFor(req) {
-  const sessionId = req.cookies?.[SESSION_COOKIE];
-  const session = sessionId ? load().sessions[sessionId] : null;
-  if (!session || Date.now() > session.expiresAt || !isWhitelisted(session.email)) return null;
-  return session.email;
+function setSessionCookie(res, sessionId, secure) {
+  res.cookie(SESSION_COOKIE, sessionId, { httpOnly: true, sameSite: 'lax', secure, maxAge: SESSION_TTL_MS });
 }
 
-// Middleware: attaches req.adminEmail for a valid admin; anything else is
-// sent to the login page (or gets a 401 for JSON requests), no exceptions.
-function requireAdmin(req, res, next) {
-  const email = adminEmailFor(req);
-  if (!email) {
-    res.clearCookie(SESSION_COOKIE);
-    if (req.is('application/json') || !req.accepts('html')) return res.status(401).json({ error: 'לא מורשה' });
-    return res.redirect('/admin-suppliers/login');
-  }
-  req.adminEmail = email;
+function currentUser(req) {
+  const sessionId = req.cookies?.[SESSION_COOKIE];
+  const db = load();
+  const session = sessionId ? db.sessions[sessionId] : null;
+  if (!session || !session.userId || Date.now() > session.expiresAt) return null;
+  return db.users[session.userId] || null;
+}
+
+function wantsJson(req) {
+  return req.path.startsWith('/api/') || req.is('application/json') || !req.accepts('html');
+}
+
+function requireUser(req, res, next) {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'יש להתחבר קודם' });
+  req.user = user;
   next();
 }
 
+// Non-admins get the login page (logged out) or a plain "not found" (logged
+// in) — the admin area is never advertised to regular accounts.
+function requireAdmin(req, res, next) {
+  const user = currentUser(req);
+  if (isAdminUser(user)) {
+    req.user = user;
+    req.adminEmail = user.email;
+    return next();
+  }
+  if (wantsJson(req)) return res.status(user ? 403 : 401).json({ error: 'לא מורשה' });
+  if (!user) return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
+  res.status(404).send('הדף לא נמצא.');
+}
+
+async function createAdminVerifyToken(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await withDb((db) => {
+    db.magicTokens[token] = { userId, purpose: 'admin-verify', expiresAt: Date.now() + ADMIN_VERIFY_TTL_MS, used: false };
+  });
+  return token;
+}
+
+// Marks the account as a confirmed admin. Returns the user, or null if the
+// token is missing, used, expired, or the email is no longer whitelisted.
+async function consumeAdminVerifyToken(token) {
+  return withDb((db) => {
+    const entry = db.magicTokens[token];
+    if (!entry || entry.purpose !== 'admin-verify') return null;
+    const user = db.users[entry.userId];
+    if (!user || !isWhitelisted(user.email)) return null;
+    // Email scanners sometimes open links before the person does; a second
+    // click on an already-used link should still say "done".
+    if (entry.used) return user.adminVerifiedAt ? user : null;
+    if (Date.now() > entry.expiresAt) return null;
+    entry.used = true;
+    user.adminVerifiedAt = user.adminVerifiedAt || new Date().toISOString();
+    return user;
+  });
+}
+
 module.exports = {
+  ROLES,
   SESSION_COOKIE,
-  SESSION_TTL_MS,
   getWhitelist,
   isWhitelisted,
-  createMagicToken,
-  consumeMagicToken,
+  normalizeEmail,
+  publicUser,
+  createUser,
+  authenticate,
   createSession,
   destroySession,
-  adminEmailFor,
+  setSessionCookie,
+  currentUser,
+  isAdminUser,
+  requireUser,
   requireAdmin,
+  createAdminVerifyToken,
+  consumeAdminVerifyToken,
 };

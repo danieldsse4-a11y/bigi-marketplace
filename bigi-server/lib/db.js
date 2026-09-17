@@ -9,7 +9,7 @@
 const storage = require('./storage');
 
 function empty() {
-  return { suppliers: {}, magicTokens: {}, sessions: {}, sampleVisibility: {} };
+  return { users: {}, suppliers: {}, magicTokens: {}, sessions: {}, sampleVisibility: {} };
 }
 
 let cache = empty();
@@ -39,11 +39,14 @@ function load() {
 
 function pruneExpired(db) {
   const now = Date.now();
+  // Used tokens stay until they expire, so a second click on a confirmation
+  // link can still show "already confirmed".
   for (const [token, entry] of Object.entries(db.magicTokens)) {
-    if (entry.used || entry.expiresAt < now) delete db.magicTokens[token];
+    if (entry.expiresAt < now || !entry.purpose) delete db.magicTokens[token];
   }
   for (const [id, session] of Object.entries(db.sessions)) {
-    if (session.expiresAt < now) delete db.sessions[id];
+    // Sessions without a userId are from the old email-only admin login.
+    if (session.expiresAt < now || !session.userId) delete db.sessions[id];
   }
 }
 
