@@ -7,6 +7,7 @@
   /* ---------- Helpers ---------- */
   const $  = (sel, ctx=document) => ctx.querySelector(sel);
   const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const starsHtml = (rating) => {
     const full = Math.round(rating);
     let html = '';
@@ -230,11 +231,11 @@
      that already holds a valid, whitelisted admin session; never a hint for
      anyone else, since the link itself starts out `hidden` in the markup. ---------- */
   function initAdminAccessLink(){
-    const link = $('#admin-access-link');
-    if(!link) return;
+    const links = $$('[data-admin-link]');
+    if(!links.length) return;
     fetch('/admin-suppliers/session-status', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if(data?.isAdmin) link.hidden = false; })
+      .then(data => { if(data?.isAdmin) links.forEach(l => l.hidden = false); })
       .catch(() => {}); // e.g. running on the plain static server with no backend — stay hidden
   }
 
@@ -323,6 +324,10 @@
         e.preventDefault();
         const id = parseInt(btn.dataset.compare);
         if(CompareStore.has(id)){ CompareStore.remove(id); btn.classList.remove('active'); }
+        else if(CompareStore.get().length >= 4){
+          btn.textContent = 'מקסימום 4 ספקים';
+          setTimeout(() => { btn.textContent = '⇄ השוואה'; }, 1600);
+        }
         else { CompareStore.add(id); btn.classList.add('active'); }
       });
     });
@@ -504,7 +509,7 @@
       if(state.minRating > 0) chips.push({ type:'rating', value:state.minRating, label:`${state.minRating}+ כוכבים` });
 
       chipsRow.innerHTML = chips.map(ch => `
-        <span class="chip" data-chip-type="${ch.type}" data-chip-value="${ch.value}">${ch.label}<button>✕</button></span>
+        <span class="chip" data-chip-type="${ch.type}" data-chip-value="${esc(ch.value)}">${esc(ch.label)}<button>✕</button></span>
       `).join('') + (chips.length ? `<button class="chip-clear" id="clear-chips">נקה הכל</button>` : '');
 
       $$('.chip button', chipsRow).forEach(btn => {
@@ -530,7 +535,7 @@
     function syncControls(){
       $$('[data-filter="cat"]').forEach(cb => cb.checked = state.cats.includes(cb.value));
       $$('[data-filter="city"]').forEach(cb => cb.checked = state.cities.includes(cb.value));
-      $$('.rating-chip').forEach(chip => chip.classList.toggle('active', parseInt(chip.dataset.rating) === state.minRating));
+      $$('.rating-chip').forEach(chip => chip.classList.toggle('active', parseFloat(chip.dataset.rating) === state.minRating));
     }
 
     function getFiltered(){
@@ -541,7 +546,8 @@
         if(v.rating < state.minRating) return false;
         if(v.priceFrom > state.maxPrice) return false;
         if(q){
-          const haystack = `${v.name} ${v.tag} ${v.city} ${nameForCat(v.cat)}`.toLowerCase();
+          const keywords = (CATEGORIES.find(c => c.id === v.cat) || {}).keywords || '';
+          const haystack = `${v.name} ${v.tag} ${v.city} ${nameForCat(v.cat)} ${keywords}`.toLowerCase();
           if(!haystack.includes(q)) return false;
         }
         return true;
@@ -586,7 +592,7 @@
 
     $$('.rating-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        const r = parseInt(chip.dataset.rating);
+        const r = parseFloat(chip.dataset.rating);
         state.minRating = state.minRating === r ? 0 : r;
         syncControls(); state.page = 1; render();
       });
@@ -838,7 +844,7 @@
             <div class="lead-actions">
               <span class="lead-status ${l.status === 'חדש' ? 'new' : 'answered'}">${l.status}</span>
               ${l.status === 'חדש' ? `<button class="btn btn-ghost btn-sm" data-mark-answered="${l.id}">סמנו כנענה</button>` : ''}
-              <a href="tel:+970500000000" class="btn btn-secondary btn-sm">התקשרו</a>
+              <a href="tel:+972500000000" class="btn btn-secondary btn-sm">התקשרו</a>
             </div>
           </div>
         </div>
@@ -895,7 +901,8 @@
       $('#phone-verify-submit')?.addEventListener('click', () => {
         const raw = $('#phone-verify-input').value.trim();
         if(!raw){ $('#phone-verify-input').focus(); return; }
-        const normalized = '972' + raw.replace(/\D/g,'').replace(/^0/, '');
+        const digits = raw.replace(/\D/g,'');
+        const normalized = digits.startsWith('972') ? digits : '972' + digits.replace(/^0/, '');
         VendorAuth.setVerifiedPhone(normalized);
         ChecklistStore.setDone(PHONE_LABEL, true);
         renderChecklist();
@@ -979,7 +986,7 @@
           <div class="chat-conv-avatar ${v.grad}">${v.emoji}</div>
           <div style="min-width:0; flex:1;">
             <div class="chat-conv-top"><span class="chat-conv-name">${v.name}</span><span class="chat-conv-time">${timeAgo(last.time)}</span></div>
-            <div class="chat-conv-preview">${last.from==='user'?'אתם: ':''}${last.text}</div>
+            <div class="chat-conv-preview">${last.from==='user'?'אתם: ':''}${esc(last.text)}</div>
           </div>
         </div>
       `).join('');
@@ -993,7 +1000,7 @@
       const thread = ChatStore.getThread(vendorId);
       const box = $('#chat-messages');
       box.innerHTML = thread.map(m => `
-        <div class="chat-bubble ${m.from}">${m.text}<span class="time">${new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span></div>
+        <div class="chat-bubble ${m.from}">${esc(m.text)}<span class="time">${new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span></div>
       `).join('');
       box.scrollTop = box.scrollHeight;
     }

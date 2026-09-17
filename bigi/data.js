@@ -3,18 +3,18 @@
    ========================================================================== */
 
 const CATEGORIES = [
-  { id: "dj",       name: "DJ ומוזיקה",           icon: "🎧", count: 184, grad: "g1" },
-  { id: "photo",    name: "צילום ווידאו",          icon: "📸", count: 231, grad: "g2" },
-  { id: "catering", name: "קייטרינג ומזון",        icon: "🍽️", count: 198, grad: "g3" },
-  { id: "design",   name: "עיצוב והפקת אירועים",   icon: "🎈", count: 142, grad: "g4" },
-  { id: "venues",   name: "אולמות וגני אירועים",   icon: "🏛️", count: 96,  grad: "g5" },
-  { id: "magic",    name: "קוסמים ואמני חושים",    icon: "🎩", count: 78,  grad: "g6" },
-  { id: "bands",    name: "להקות וזמרים",          icon: "🎤", count: 113, grad: "g7" },
-  { id: "invites",  name: "הזמנות ועיצוב גרפי",    icon: "💌", count: 87,  grad: "g8" },
-  { id: "flowers",  name: "פרחים ועיצוב שולחנות",  icon: "💐", count: 104, grad: "g1" },
-  { id: "beauty",   name: "איפור ושיער לכלה",      icon: "💄", count: 156, grad: "g2" },
-  { id: "rentals",  name: "השכרת תאורה והגברה",    icon: "💡", count: 69,  grad: "g3" },
-  { id: "transport", name: "הסעות לאירועים",       icon: "🚌", count: 52,  grad: "g4" },
+  { id: "dj",       name: "DJ ומוזיקה",           icon: "🎧", count: 184, grad: "g1", keywords: "די ג'יי דיג'יי דיגיי תקליטן מוזיקה" },
+  { id: "photo",    name: "צילום ווידאו",          icon: "📸", count: 231, grad: "g2", keywords: "צלם צלמת צלמים מצלמה סטילס וידאו צילומים" },
+  { id: "catering", name: "קייטרינג ומזון",        icon: "🍽️", count: 198, grad: "g3", keywords: "אוכל שף מזון כשר קייטרינג" },
+  { id: "design",   name: "עיצוב והפקת אירועים",   icon: "🎈", count: 142, grad: "g4", keywords: "מעצב מעצבת הפקה מפיק מפיקה בלונים" },
+  { id: "venues",   name: "אולמות וגני אירועים",   icon: "🏛️", count: 96,  grad: "g5", keywords: "אולם גן מקום לאירוע" },
+  { id: "magic",    name: "קוסמים ואמני חושים",    icon: "🎩", count: 78,  grad: "g6", keywords: "קוסם ליצן ליצנים מופע ילדים" },
+  { id: "bands",    name: "להקות וזמרים",          icon: "🎤", count: 113, grad: "g7", keywords: "להקה זמר זמרת נגנים הופעה חיה" },
+  { id: "invites",  name: "הזמנות ועיצוב גרפי",    icon: "💌", count: 87,  grad: "g8", keywords: "הזמנה גרפיקה גרפיקאי מעצב גרפי" },
+  { id: "flowers",  name: "פרחים ועיצוב שולחנות",  icon: "💐", count: 104, grad: "g1", keywords: "פרח זר זרים שולחנות" },
+  { id: "beauty",   name: "איפור ושיער לכלה",      icon: "💄", count: 156, grad: "g2", keywords: "מאפרת איפור תסרוקת שיער כלה" },
+  { id: "rentals",  name: "השכרת תאורה והגברה",    icon: "💡", count: 69,  grad: "g3", keywords: "הגברה תאורה סאונד רמקולים ציוד" },
+  { id: "transport", name: "הסעות לאירועים",       icon: "🚌", count: 52,  grad: "g4", keywords: "הסעה אוטובוס מיניבוס נהג" },
 ];
 
 const CITIES = ["תל אביב", "ירושלים", "חיפה", "באר שבע", "ראשון לציון", "פתח תקווה", "נתניה", "אשדוד", "רמת גן", "הרצליה"];

@@ -6,10 +6,11 @@ const { escapeHtml } = require('./layout');
 // built for.
 
 function waLink(phone, name) {
-  const digits = String(phone || '').replace(/\D/g, '').replace(/^0/, '');
+  const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return null;
+  const intl = digits.startsWith('972') ? digits : '972' + digits.replace(/^0/, '');
   const msg = encodeURIComponent(`שלום ${name}, ראיתי את הפרופיל שלכם ורציתי לשאול לגבי זמינות ומחיר.`);
-  return `https://wa.me/972${digits}?text=${msg}`;
+  return `https://wa.me/${intl}?text=${msg}`;
 }
 
 function supplierViewPage(supplier) {
@@ -19,6 +20,11 @@ function supplierViewPage(supplier) {
   } = supplier;
 
   const whatsapp = waLink(phone, name);
+  // Only http(s) links are clickable; a bare "instagram.com/x" gets https:// added.
+  const linkHref = !links ? null
+    : /^https?:\/\//i.test(links) ? links
+    : /^[a-z][a-z0-9+.-]*:/i.test(links) ? null
+    : `https://${links}`;
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -115,7 +121,9 @@ function supplierViewPage(supplier) {
       <div style="display:flex; flex-direction:column; gap:8px; font-size:14px;">
         ${phone ? `<div>📞 <a href="tel:${escapeHtml(phone)}" style="color:var(--primary); font-weight:700;">${escapeHtml(phone)}</a></div>` : ''}
         ${contactEmail ? `<div>✉️ <a href="mailto:${escapeHtml(contactEmail)}" style="color:var(--primary); font-weight:700;">${escapeHtml(contactEmail)}</a></div>` : ''}
-        ${links ? `<div>🔗 <a href="${escapeHtml(links)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:700;">${escapeHtml(links)}</a></div>` : ''}
+        ${links ? `<div>🔗 ${linkHref
+          ? `<a href="${escapeHtml(linkHref)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:700;">${escapeHtml(links)}</a>`
+          : `<span style="font-weight:700;">${escapeHtml(links)}</span>`}</div>` : ''}
       </div>` : ''}
     </div>` : ''}
 

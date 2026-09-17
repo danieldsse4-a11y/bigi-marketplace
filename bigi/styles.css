@@ -169,6 +169,7 @@ h3{ font-size:20px; }
 .nav-text-link:hover{ background:var(--primary-soft); color:var(--primary); }
 .nav-text-link[hidden]{ display:none; }
 [data-customer-guest][hidden],[data-customer-logged-in][hidden]{ display:none; }
+.main-nav .nav-mobile-only{ display:none; }
 .compare-pill .count{
   background:var(--accent); color:#fff; border-radius:50%; width:20px; height:20px;
   display:flex; align-items:center; justify-content:center; font-size:12px;
@@ -914,6 +915,15 @@ h3{ font-size:20px; }
 @media (max-width:760px){
   .main-nav{ display:none; }
   .nav-toggle{ display:flex; }
+  .site-header .wrap{ gap:10px; }
+  .logo{ font-size:20px; white-space:nowrap; flex-shrink:0; }
+  .header-actions{ gap:4px; }
+  .header-actions .nav-text-link,
+  .header-actions .compare-pill,
+  .header-actions .header-extra,
+  .pill-greeting{ display:none; }
+  .main-nav .nav-mobile-only{ display:block; }
+  .main-nav .nav-mobile-only[hidden]{ display:none; }
   .search-card{ grid-template-columns:1fr; }
   .cat-grid{ grid-template-columns:repeat(3,1fr); }
   .deals-grid{ grid-template-columns:1fr; }
