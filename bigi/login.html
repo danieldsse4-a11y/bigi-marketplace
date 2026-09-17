@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
 <title>כניסת ספקים — ביגי ספקים</title>
 <meta name="description" content="התחברו כספק בביגי ספקים כדי לנהל את הפרופיל העסקי, הפניות והחבילות שלכם.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,11 +61,11 @@
     <form id="login-form">
       <div class="form-field">
         <label for="login-email">אימייל</label>
-        <input id="login-email" type="email" required placeholder="you@business.co.il">
+        <input id="login-email" type="email" required autocomplete="email" placeholder="you@business.co.il">
       </div>
       <div class="form-field">
         <label for="login-password">סיסמה</label>
-        <input id="login-password" type="password" required placeholder="••••••••">
+        <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••">
       </div>
       <button type="submit" class="btn btn-primary btn-block">התחברות</button>
       <p style="text-align:center; color:var(--muted); font-size:12.5px; margin-top:16px;">

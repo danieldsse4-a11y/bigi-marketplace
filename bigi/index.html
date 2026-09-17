@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
 <title>ביגי ספקים — המרקטפלייס שמחבר אתכם לספק האירוע המושלם</title>
 <meta name="description" content="ביגי ספקים הוא מרקטפלייס דיגיטלי שמחבר בין לקוחות לספקי אירועים מובילים — DJ, צלמים, קייטרינג, אולמות, קוסמים ועוד, הכל במקום אחד.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +21,7 @@
       <a href="index.html" class="active">בית</a>
       <a href="vendors.html">כל הספקים</a>
       <a href="join.html">הצטרפות כספק</a>
+      <a href="chat.html" class="nav-mobile-only nav-xs-only">💬 ההודעות שלי</a>
       <a href="login.html" class="nav-mobile-only" data-guest-only>כניסת ספקים</a>
       <a href="dashboard.html" class="nav-mobile-only" data-vendor-only hidden>לוח בקרה</a>
       <a href="/admin-suppliers" class="nav-mobile-only" data-admin-link hidden>🔐 ניהול ספקים</a>
@@ -58,7 +60,7 @@
       <div class="search-field">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <label for="search-what">מה אתם מחפשים?</label>
-        <input id="search-what" type="text" placeholder="מה אתם מחפשים? (למשל: DJ, צלם, קייטרינג...)">
+        <input id="search-what" type="search" enterkeyhint="search" placeholder="מה אתם מחפשים? (למשל: DJ, צלם, קייטרינג...)">
       </div>
       <div class="search-field">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
@@ -152,7 +154,7 @@
       <h3>קבלו דילים חדשים ישר לתיבה 📬</h3>
       <p>עדכונים על ספקי אירועים חדשים, מבצעים וטיפים לתכנון האירוע — פעם בשבוע, בלי ספאם.</p>
       <form class="newsletter-form" onsubmit="event.preventDefault(); this.reset(); this.querySelector('button').textContent='נרשמת בהצלחה! 🎉';">
-        <input type="email" required placeholder="האימייל שלכם">
+        <input type="email" required autocomplete="email" placeholder="האימייל שלכם">
         <button class="btn" type="submit">הרשמה</button>
       </form>
     </div>

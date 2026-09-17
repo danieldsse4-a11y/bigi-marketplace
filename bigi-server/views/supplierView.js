@@ -1,4 +1,6 @@
 const { escapeHtml } = require('./layout');
+const { categoryById } = require('../lib/siteData');
+const { normalizePhone } = require('../lib/catalog');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
 // needs the real site header (same markup as bigi/vendor.html) plus a
@@ -6,19 +8,19 @@ const { escapeHtml } = require('./layout');
 // built for.
 
 function waLink(phone, name) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  if (!digits) return null;
-  const intl = digits.startsWith('972') ? digits : '972' + digits.replace(/^0/, '');
+  const intl = normalizePhone(phone);
+  if (!intl) return null;
   const msg = encodeURIComponent(`שלום ${name}, ראיתי את הפרופיל שלכם ורציתי לשאול לגבי זמינות ומחיר.`);
   return `https://wa.me/${intl}?text=${msg}`;
 }
 
 function supplierViewPage(supplier) {
   const {
-    name, category, description, phone, contactEmail, links,
+    name, category, city, description, phone, contactEmail, links,
     backgroundImage, productImages,
   } = supplier;
 
+  const categoryLabel = categoryById(category)?.name || category;
   const whatsapp = waLink(phone, name);
   // Only http(s) links are clickable; a bare "instagram.com/x" gets https:// added.
   const linkHref = !links ? null
@@ -31,6 +33,7 @@ function supplierViewPage(supplier) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(name)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -78,6 +81,13 @@ function supplierViewPage(supplier) {
     background:linear-gradient(0deg, rgba(0,0,0,0.72), transparent);
     color:#fff; font-size:11.5px; line-height:1.3;
   }
+  .supplier-contact a{ display:inline-block; padding:4px 0; }
+  @media (max-width:760px){
+    .supplier-section{ padding:20px 18px; }
+    .supplier-glass-card{ margin-top:-48px; }
+    .supplier-gallery-item figcaption{ font-size:12.5px; }
+    .supplier-contact a{ padding:8px 0; word-break:break-all; }
+  }
 </style>
 </head>
 <body>
@@ -101,7 +111,8 @@ function supplierViewPage(supplier) {
     <div>
       <h1>${escapeHtml(name)}</h1>
       <div class="profile-hero-meta">
-        <span>${escapeHtml(category)}</span>
+        <span>${escapeHtml(categoryLabel)}</span>
+        ${city ? `<span>📍 ${escapeHtml(city)}</span>` : ''}
       </div>
       ${whatsapp ? `
       <div class="profile-hero-actions">
@@ -118,7 +129,7 @@ function supplierViewPage(supplier) {
     <div class="supplier-section">
       ${description ? `<p style="font-size:15px; line-height:1.7; color:var(--ink-soft); margin-bottom:${(phone||contactEmail||links) ? '18px' : '0'};">${escapeHtml(description)}</p>` : ''}
       ${(phone || contactEmail || links) ? `
-      <div style="display:flex; flex-direction:column; gap:8px; font-size:14px;">
+      <div class="supplier-contact" style="display:flex; flex-direction:column; gap:8px; font-size:14px;">
         ${phone ? `<div>📞 <a href="tel:${escapeHtml(phone)}" style="color:var(--primary); font-weight:700;">${escapeHtml(phone)}</a></div>` : ''}
         ${contactEmail ? `<div>✉️ <a href="mailto:${escapeHtml(contactEmail)}" style="color:var(--primary); font-weight:700;">${escapeHtml(contactEmail)}</a></div>` : ''}
         ${links ? `<div>🔗 ${linkHref

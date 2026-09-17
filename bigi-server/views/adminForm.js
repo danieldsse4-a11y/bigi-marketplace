@@ -1,4 +1,5 @@
-const { page, escapeHtml } = require('./layout');
+const { page, adminTabs, escapeHtml } = require('./layout');
+const { CATEGORIES, CITIES } = require('../lib/siteData');
 
 const MIN_PRODUCT_IMAGES = 5;
 const MAX_PRODUCT_IMAGES = 10;
@@ -9,7 +10,7 @@ function photoRow(n, removable) {
       <div style="flex:1;">
         <label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה ${n}</label>
         <input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>
-        <input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" style="margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:13.5px;">
+        <input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" class="photo-caption-input">
       </div>
       ${removable ? `<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>` : ''}
     </div>`;
@@ -17,14 +18,17 @@ function photoRow(n, removable) {
 
 function createFormPage({ adminEmail, error, values = {} } = {}) {
   const v = (k) => escapeHtml(values[k] || '');
+  const option = (value, label, selected) =>
+    `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 
   const body = `
+    ${adminTabs('create')}
     <div class="admin-card">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <div class="admin-card-head">
         <h1 style="margin-bottom:0;">➕ פרופיל ספק חדש</h1>
-        <form method="POST" action="/admin-suppliers/logout"><button type="submit" class="btn btn-ghost btn-sm">התנתקות (${escapeHtml(adminEmail)})</button></form>
+        <form method="POST" action="/admin-suppliers/logout" style="max-width:100%;"><button type="submit" class="btn btn-ghost btn-sm admin-logout-btn">התנתקות (${escapeHtml(adminEmail)})</button></form>
       </div>
-      <p class="lead">הפרופיל נוצר כ"לא מופיע באתר" ונשלח קישור פרטי אליו לשני המיילים המורשים בלבד.</p>
+      <p class="lead">הפרופיל נוצר כ<strong>דמו</strong> (לא מופיע באתר) ונשלח קישור פרטי אליו לשני המיילים המורשים בלבד. אפשר לפרסם אותו באתר בכל רגע מתוך "כל הפרופילים".</p>
 
       ${error ? `<div class="admin-alert error">${escapeHtml(error)}</div>` : ''}
 
@@ -37,12 +41,23 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
         <div class="form-row">
           <div class="form-field">
             <label for="category">קטגוריה *</label>
-            <input id="category" name="category" type="text" required value="${v('category')}" placeholder="לדוגמה: צילום, קייטרינג...">
+            <select id="category" name="category" required>
+              ${option('', 'בחרו קטגוריה', !values.category)}
+              ${CATEGORIES.map((c) => option(c.id, `${c.icon} ${c.name}`, values.category === c.id)).join('')}
+            </select>
           </div>
           <div class="form-field">
-            <label for="phone">טלפון</label>
-            <input id="phone" name="phone" type="tel" value="${v('phone')}" placeholder="050-0000000">
+            <label for="city">עיר</label>
+            <select id="city" name="city">
+              ${option('', 'בחרו עיר (לא חובה)', !values.city)}
+              ${CITIES.map((c) => option(c, c, values.city === c)).join('')}
+            </select>
           </div>
+        </div>
+
+        <div class="form-field">
+          <label for="phone">טלפון</label>
+          <input id="phone" name="phone" type="tel" autocomplete="off" value="${v('phone')}" placeholder="050-0000000">
         </div>
 
         <div class="form-field">
@@ -106,7 +121,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
             '<div style="flex:1;">' +
               '<label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה</label>' +
               '<input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>' +
-              '<input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" style="margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:13.5px;">' +
+              '<input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" class="photo-caption-input">' +
             '</div>' +
             '<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>';
           rowsContainer.appendChild(div);
@@ -137,13 +152,14 @@ function successPage({ name, link }) {
     <div class="admin-card" style="text-align:center;">
       <div style="font-size:52px; margin-bottom:12px;">✅</div>
       <h1>הפרופיל של "${escapeHtml(name)}" נוצר בהצלחה</h1>
-      <p class="lead">הפרופיל <strong>לא מופיע</strong> באתר הציבורי. קישור פרטי נשלח למיילים המורשים.</p>
+      <p class="lead">הפרופיל נשמר כ<strong>דמו</strong> ולא מופיע באתר הציבורי. קישור פרטי נשלח למיילים המורשים.</p>
       <div class="link-box">
         <span>🔗</span>
         <a href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(link)}</a>
       </div>
-      <div style="display:flex; gap:12px; justify-content:center; margin-top:28px;">
-        <a href="/admin-suppliers" class="btn btn-primary">יצירת פרופיל נוסף</a>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:28px;">
+        <a href="/admin-suppliers/profiles" class="btn btn-primary">לכל הפרופילים (פרסום באתר)</a>
+        <a href="/admin-suppliers" class="btn btn-secondary">יצירת פרופיל נוסף</a>
       </div>
     </div>
   `;

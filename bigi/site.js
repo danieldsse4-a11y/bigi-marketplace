@@ -18,6 +18,13 @@
   };
   const emojiForCat = (id) => (CATEGORIES.find(c=>c.id===id) || {}).icon || '⭐';
   const nameForCat = (id) => (CATEGORIES.find(c=>c.id===id) || {}).name || '';
+  // Sample suppliers have numeric ids; profiles published from the admin area have string ids.
+  const idOf = (raw) => /^\d+$/.test(String(raw)) ? Number(raw) : String(raw);
+  const findVendor = (id) => VENDORS.find(v => v.id === id);
+  // Suppliers switched to "demo" are only sent to admins (flagged hidden) and never listed.
+  const listedVendors = () => VENDORS.filter(v => !v.hidden);
+  const profileUrl = (v) => v.url || `vendor.html?id=${encodeURIComponent(v.id)}`;
+  const formatPrice = (n) => `₪${Number(n).toLocaleString('he-IL')}`;
 
   /* ---------- Compare state (localStorage) ---------- */
   const CompareStore = {
@@ -50,6 +57,7 @@
     get(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch(e){ return null; } },
     isLoggedIn(){ return !!this.get(); },
     login(vendor){
+      if(!vendor) return;
       localStorage.setItem(this.key, JSON.stringify({ vendorId: vendor.id, name: vendor.name, verifiedPhone: null }));
       document.dispatchEvent(new CustomEvent('vendorauth:change'));
     },
@@ -100,7 +108,7 @@
       all[vendorId].push(msg);
       this.saveAll(all);
     },
-    listConversationIds(){ return Object.keys(this.getAll()).map(Number).filter(id => this.getAll()[id].length); }
+    listConversationIds(){ const all = this.getAll(); return Object.keys(all).filter(id => all[id].length).map(idOf); }
   };
   window.ChatStore = ChatStore;
 
@@ -131,12 +139,20 @@
 
   /* ---------- Mobile nav toggle ---------- */
   const navToggle = $('.nav-toggle');
-  if(navToggle){
-    navToggle.addEventListener('click', () => {
-      const nav = $('.main-nav');
-      const open = nav.style.display === 'flex';
-      nav.style.display = open ? '' : 'flex';
-      nav.style.cssText += open ? '' : 'position:absolute;top:76px;right:24px;left:24px;background:#fff;flex-direction:column;padding:16px;border-radius:16px;box-shadow:0 10px 30px rgba(26,23,48,0.15);z-index:250;';
+  const mainNav = $('.main-nav');
+  if(navToggle && mainNav){
+    const setMenu = (open) => {
+      mainNav.style.cssText = open
+        ? 'display:flex;position:absolute;top:calc(var(--header-h) + 6px);right:16px;left:16px;background:#fff;flex-direction:column;align-items:stretch;padding:12px;border-radius:16px;box-shadow:0 10px 30px rgba(26,23,48,0.15);z-index:250;'
+        : '';
+      navToggle.setAttribute('aria-expanded', String(open));
+    };
+    navToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setMenu(mainNav.style.display !== 'flex');
+    });
+    document.addEventListener('click', (e) => {
+      if(mainNav.style.display === 'flex' && !mainNav.contains(e.target)) setMenu(false);
     });
   }
 
@@ -215,8 +231,7 @@
   function initHeroSearch(){
     const btn = $('#hero-search-btn');
     if(!btn) return;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
+    const go = () => {
       const q = $('#search-what')?.value.trim() || '';
       const city = $('#search-where')?.value || '';
       const params = new URLSearchParams();
@@ -224,6 +239,10 @@
       if(city) params.set('city', city);
       const qs = params.toString();
       location.href = 'vendors.html' + (qs ? '?' + qs : '');
+    };
+    btn.addEventListener('click', (e) => { e.preventDefault(); go(); });
+    $('#search-what')?.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ e.preventDefault(); go(); }
     });
   }
 
@@ -243,18 +262,18 @@
   function initDeals(){
     const grid = $('#deals-grid');
     if(!grid) return;
-    const deals = VENDORS.filter(v => v.badge).slice(0, 3);
+    const deals = listedVendors().filter(v => v.badge && v.priceFrom != null).slice(0, 3);
     const badgeClass = { 'מומלץ':'badge-top', 'זמין השבוע':'badge-hot', 'חדש':'badge-new' };
     grid.innerHTML = deals.map(v => `
       <div class="deal-card reveal">
         <div class="deal-media ${v.grad}">
-          <span class="badge ${badgeClass[v.badge]}">${v.badge}</span>
-          ${v.emoji}
+          <span class="badge ${badgeClass[v.badge]}">${esc(v.badge)}</span>
+          ${esc(v.emoji)}
         </div>
         <div class="deal-body">
-          <h4>${v.name}</h4>
-          <p>${v.tag} · ${v.city}</p>
-          <div class="deal-price"><strong>₪${v.priceFrom.toLocaleString('he-IL')}</strong><span>החל מ־</span></div>
+          <h4>${esc(v.name)}</h4>
+          <p>${esc(v.tag)} · ${esc(v.city)}</p>
+          <div class="deal-price"><strong>${formatPrice(v.priceFrom)}</strong><span>החל מ־</span></div>
         </div>
       </div>
     `).join('');
@@ -264,25 +283,29 @@
   function vendorCardHtml(v, index=0){
     const badgeClass = { 'מומלץ':'badge-top', 'זמין השבוע':'badge-hot', 'חדש':'badge-new' };
     const isFav = FavoritesStore.has(v.id);
+    const id = esc(v.id);
+    const tagLine = [v.tag, v.city].filter(Boolean).map(esc).join(' · ');
     return `
-    <div class="vendor-card stagger-in" style="animation-delay:${(index%9)*60}ms" data-vendor-id="${v.id}">
-      <div class="vendor-media ${v.grad}">
-        ${v.badge ? `<span class="badge ${badgeClass[v.badge]}">${v.badge}</span>` : ''}
-        <button class="vendor-fav ${isFav?'active':''}" aria-label="הוסף למועדפים" data-fav="${v.id}">${isFav?'❤️':'🤍'}</button>
-        <button class="vendor-compare-btn ${CompareStore.has(v.id)?'active':''}" data-compare="${v.id}">⇄ השוואה</button>
-        ${v.emoji}
+    <div class="vendor-card stagger-in" style="animation-delay:${(index%9)*60}ms" data-vendor-id="${id}">
+      <div class="vendor-media ${v.image ? 'has-photo' : v.grad}"${v.image ? ` style="background-image:url('${esc(encodeURI(v.image).replace(/'/g, '%27'))}')"` : ''}>
+        ${v.badge ? `<span class="badge ${badgeClass[v.badge] || 'badge-new'}">${esc(v.badge)}</span>` : ''}
+        <button class="vendor-fav ${isFav?'active':''}" aria-label="הוסף למועדפים" data-fav="${id}">${isFav?'❤️':'🤍'}</button>
+        <button class="vendor-compare-btn ${CompareStore.has(v.id)?'active':''}" data-compare="${id}">⇄ השוואה</button>
+        ${v.image ? '' : esc(v.emoji)}
       </div>
       <div class="vendor-body">
-        <div class="vendor-top"><h4>${v.name}</h4></div>
-        <div class="vendor-tag">${v.tag} · ${v.city}</div>
+        <div class="vendor-top"><h4>${esc(v.name)}</h4></div>
+        <div class="vendor-tag">${tagLine}</div>
         <div class="vendor-meta">
-          <div class="stars">${starsHtml(v.rating)} <span class="rating-num">${v.rating}</span> <span class="review-count">(${v.reviews})</span></div>
+          ${v.rating != null
+            ? `<div class="stars">${starsHtml(v.rating)} <span class="rating-num">${v.rating}</span> <span class="review-count">(${v.reviews})</span></div>`
+            : `<div class="vendor-new-note">ספק חדש בביגי ✨</div>`}
         </div>
         <div class="vendor-meta" style="margin-top:8px;">
-          <span class="vendor-price">מ־₪${v.priceFrom.toLocaleString('he-IL')}</span>
+          <span class="vendor-price">${v.priceFrom != null ? `מ־${formatPrice(v.priceFrom)}` : 'מחיר לפי פנייה'}</span>
           <div class="vendor-actions">
-            <a href="${whatsappLink(v)}" target="_blank" rel="noopener" class="whatsapp-btn" aria-label="צרו קשר בוואטסאפ" title="צרו קשר בוואטסאפ" onclick="event.stopPropagation()">${whatsappIconSvg}</a>
-            <a href="vendor.html?id=${v.id}" class="btn btn-ghost btn-sm">לפרופיל</a>
+            ${v.phone ? `<a href="${esc(whatsappLink(v))}" target="_blank" rel="noopener" class="whatsapp-btn" aria-label="צרו קשר בוואטסאפ" title="צרו קשר בוואטסאפ" onclick="event.stopPropagation()">${whatsappIconSvg}</a>` : ''}
+            <a href="${esc(profileUrl(v))}" class="btn btn-ghost btn-sm">לפרופיל</a>
           </div>
         </div>
       </div>
@@ -293,7 +316,7 @@
   function initCarousel(){
     const track = $('#vendor-carousel-track');
     if(!track) return;
-    const top = [...VENDORS].sort((a,b)=>b.rating-a.rating).slice(0,8);
+    const top = listedVendors().filter(v => v.rating != null).sort((a,b)=>b.rating-a.rating).slice(0,8);
     track.innerHTML = top.map((v,i) => vendorCardHtml(v,i)).join('');
     let offset = 0;
     const cardWidth = 310;
@@ -314,7 +337,7 @@
     $$('[data-fav]', root).forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        FavoritesStore.toggle(parseInt(btn.dataset.fav));
+        FavoritesStore.toggle(idOf(btn.dataset.fav));
         btn.style.transform = 'scale(1.3)';
         setTimeout(()=> btn.style.transform = '', 250);
       });
@@ -322,7 +345,7 @@
     $$('[data-compare]', root).forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const id = parseInt(btn.dataset.compare);
+        const id = idOf(btn.dataset.compare);
         if(CompareStore.has(id)){ CompareStore.remove(id); btn.classList.remove('active'); }
         else if(CompareStore.get().length >= 4){
           btn.textContent = 'מקסימום 4 ספקים';
@@ -349,15 +372,16 @@
       } else {
         bar.classList.add('open');
         items.innerHTML = list.map(id => {
-          const v = VENDORS.find(x=>x.id===id);
+          const v = findVendor(id);
           if(!v) return '';
-          return `<div class="compare-chip-item"><span class="mini ${v.grad}">${v.emoji}</span>${v.name}<button data-compare-remove="${v.id}">✕</button></div>`;
+          return `<div class="compare-chip-item"><span class="mini ${v.grad}">${esc(v.emoji)}</span>${esc(v.name)}<button data-compare-remove="${esc(v.id)}" aria-label="הסרה מההשוואה">✕</button></div>`;
         }).join('');
         $('#compare-count-badge').textContent = list.length;
         $$('[data-compare-remove]', items).forEach(btn => {
           btn.addEventListener('click', () => {
-            CompareStore.remove(parseInt(btn.dataset.compareRemove));
-            $$(`[data-compare="${btn.dataset.compareRemove}"]`).forEach(b=>b.classList.remove('active'));
+            const id = idOf(btn.dataset.compareRemove);
+            CompareStore.remove(id);
+            $$('[data-compare]').filter(b => idOf(b.dataset.compare) === id).forEach(b=>b.classList.remove('active'));
           });
         });
       }
@@ -370,7 +394,7 @@
     const list = FavoritesStore.get();
     $$('.nav-fav-count').forEach(el => { el.textContent = list.length; el.hidden = list.length === 0; });
     $$('[data-fav]').forEach(btn => {
-      const active = list.includes(parseInt(btn.dataset.fav));
+      const active = list.includes(idOf(btn.dataset.fav));
       btn.classList.toggle('active', active);
       btn.textContent = active ? '❤️' : '🤍';
     });
@@ -383,7 +407,7 @@
     if(!grid) return;
     function render(){
       const ids = FavoritesStore.get();
-      const list = VENDORS.filter(v => ids.includes(v.id));
+      const list = listedVendors().filter(v => ids.includes(v.id));
       const empty = $('#favorites-empty');
       if(list.length === 0){
         grid.innerHTML = '';
@@ -438,6 +462,7 @@
       if(nameInput) nameInput.required = m === 'signup';
       if(confirmInput) confirmInput.required = m === 'signup';
       if(submitBtn) submitBtn.textContent = m === 'signup' ? 'הרשמה' : 'התחברות';
+      $('#customer-login-password')?.setAttribute('autocomplete', m === 'signup' ? 'new-password' : 'current-password');
     }
     tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.authTab)));
 
@@ -540,11 +565,11 @@
 
     function getFiltered(){
       const q = state.query.toLowerCase();
-      let list = VENDORS.filter(v => {
+      let list = listedVendors().filter(v => {
         if(state.cats.length && !state.cats.includes(v.cat)) return false;
         if(state.cities.length && !state.cities.includes(v.city)) return false;
-        if(v.rating < state.minRating) return false;
-        if(v.priceFrom > state.maxPrice) return false;
+        if(state.minRating > 0 && (v.rating == null || v.rating < state.minRating)) return false;
+        if(v.priceFrom != null && v.priceFrom > state.maxPrice) return false;
         if(q){
           const keywords = (CATEGORIES.find(c => c.id === v.cat) || {}).keywords || '';
           const haystack = `${v.name} ${v.tag} ${v.city} ${nameForCat(v.cat)} ${keywords}`.toLowerCase();
@@ -552,9 +577,10 @@
         }
         return true;
       });
-      if(state.sort === 'price-asc') list.sort((a,b)=>a.priceFrom-b.priceFrom);
-      else if(state.sort === 'price-desc') list.sort((a,b)=>b.priceFrom-a.priceFrom);
-      else if(state.sort === 'rating') list.sort((a,b)=>b.rating-a.rating);
+      // Suppliers without a price or rating yet go last.
+      if(state.sort === 'price-asc') list.sort((a,b)=>(a.priceFrom ?? Infinity)-(b.priceFrom ?? Infinity));
+      else if(state.sort === 'price-desc') list.sort((a,b)=>(b.priceFrom ?? -Infinity)-(a.priceFrom ?? -Infinity));
+      else if(state.sort === 'rating') list.sort((a,b)=>(b.rating ?? -1)-(a.rating ?? -1));
       return list;
     }
 
@@ -627,8 +653,9 @@
     const root = $('#vendor-profile');
     if(!root) return;
     const params = new URLSearchParams(location.search);
-    const id = parseInt(params.get('id')) || VENDORS[0].id;
-    const v = VENDORS.find(x => x.id === id) || VENDORS[0];
+    const v = findVendor(idOf(params.get('id') || ''));
+    if(!v){ location.replace('vendors.html'); return; }
+    if(v.url){ location.replace(v.url); return; }
 
     $('#profile-avatar').textContent = v.emoji;
     $('#profile-name').textContent = v.name;
@@ -766,7 +793,7 @@
       form.style.display = 'none';
       $('#form-success').classList.add('show');
       // Demo: joining logs you in as a vendor so you can explore the dashboard
-      VendorAuth.login(VENDORS[0]);
+      VendorAuth.login(listedVendors()[0]);
     });
   }
 
@@ -790,7 +817,12 @@
     });
 
     const session = VendorAuth.get();
-    const vendor = VENDORS.find(v => v.id === session.vendorId) || VENDORS[0];
+    const vendor = findVendor(session.vendorId) || listedVendors()[0];
+    if(!vendor){
+      root.hidden = true;
+      if(locked) locked.hidden = false;
+      return;
+    }
 
     $('#dash-vendor-name').textContent = vendor.name;
     $('#dash-vendor-emoji').textContent = vendor.emoji;
@@ -889,7 +921,7 @@
         </div>
       `).join('') + `
         <div class="phone-verify-panel" id="phone-verify-panel" hidden>
-          <input type="tel" id="phone-verify-input" placeholder="050-1234567">
+          <input type="tel" id="phone-verify-input" placeholder="050-1234567" autocomplete="tel">
           <button class="btn btn-primary btn-sm" id="phone-verify-submit">אמתו</button>
         </div>
       `;
@@ -925,11 +957,11 @@
     if(!form) return;
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      VendorAuth.login(VENDORS[0]);
+      VendorAuth.login(listedVendors()[0]);
       location.href = 'dashboard.html';
     });
     $('#google-vendor-auth-btn')?.addEventListener('click', () => {
-      VendorAuth.login(VENDORS[0]);
+      VendorAuth.login(listedVendors()[0]);
       location.href = 'dashboard.html';
     });
   }
@@ -947,7 +979,7 @@
     ];
 
     const params = new URLSearchParams(location.search);
-    let activeId = params.get('id') ? parseInt(params.get('id')) : null;
+    let activeId = params.get('id') ? idOf(params.get('id')) : null;
 
     function timeAgo(ts){
       const mins = Math.floor((Date.now() - ts) / 60000);
@@ -991,7 +1023,7 @@
         </div>
       `).join('');
       $$('.chat-conv-item', list).forEach(el => {
-        el.addEventListener('click', () => openThread(parseInt(el.dataset.conv)));
+        el.addEventListener('click', () => openThread(idOf(el.dataset.conv)));
       });
       renderChatBadge();
     }

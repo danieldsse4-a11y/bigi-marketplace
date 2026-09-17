@@ -68,21 +68,25 @@ async function destroySession(sessionId) {
   });
 }
 
-// Middleware: attaches req.adminEmail if — and only if — the session cookie
-// maps to a live, non-expired session AND that email is still whitelisted
-// right now. Anything else gets a 401, no exceptions.
-function requireAdmin(req, res, next) {
+// The admin email behind this request's session cookie, or null. Checks the
+// session is live AND the email is still whitelisted right now.
+function adminEmailFor(req) {
   const sessionId = req.cookies?.[SESSION_COOKIE];
-  const db = load();
-  const session = sessionId ? db.sessions[sessionId] : null;
+  const session = sessionId ? load().sessions[sessionId] : null;
+  if (!session || Date.now() > session.expiresAt || !isWhitelisted(session.email)) return null;
+  return session.email;
+}
 
-  if (!session || Date.now() > session.expiresAt || !isWhitelisted(session.email)) {
+// Middleware: attaches req.adminEmail for a valid admin; anything else is
+// sent to the login page (or gets a 401 for JSON requests), no exceptions.
+function requireAdmin(req, res, next) {
+  const email = adminEmailFor(req);
+  if (!email) {
     res.clearCookie(SESSION_COOKIE);
-    if (req.accepts('html')) return res.redirect('/admin-suppliers/login');
-    return res.status(401).json({ error: 'לא מורשה' });
+    if (req.is('application/json') || !req.accepts('html')) return res.status(401).json({ error: 'לא מורשה' });
+    return res.redirect('/admin-suppliers/login');
   }
-
-  req.adminEmail = session.email;
+  req.adminEmail = email;
   next();
 }
 
@@ -95,5 +99,6 @@ module.exports = {
   consumeMagicToken,
   createSession,
   destroySession,
+  adminEmailFor,
   requireAdmin,
 };

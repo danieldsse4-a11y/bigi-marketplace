@@ -5,11 +5,15 @@
   "description": "Backend for בּיגי ספקים — serves the existing static site plus a hidden admin area for creating unlisted supplier profiles.",
   "type": "commonjs",
   "main": "server.js",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
     "express": "^5.0.1",

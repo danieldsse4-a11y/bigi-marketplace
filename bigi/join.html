@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
 <title>הצטרפות כספק אירועים — ביגי ספקים</title>
 <meta name="description" content="הצטרפו לאלפי ספקי האירועים שכבר מוצאים לקוחות חדשים דרך ביגי ספקים. הרשמה חינמית ומהירה.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +21,7 @@
       <a href="index.html">בית</a>
       <a href="vendors.html">כל הספקים</a>
       <a href="join.html" class="active">הצטרפות כספק</a>
+      <a href="chat.html" class="nav-mobile-only nav-xs-only">💬 ההודעות שלי</a>
       <a href="login.html" class="nav-mobile-only" data-guest-only>כניסת ספקים</a>
       <a href="dashboard.html" class="nav-mobile-only" data-vendor-only hidden>לוח בקרה</a>
     </nav>
@@ -58,18 +60,18 @@
       <div class="form-row">
         <div class="form-field">
           <label for="biz-name">שם העסק</label>
-          <input id="biz-name" type="text" required placeholder="לדוגמה: סטודיו לומן">
+          <input id="biz-name" type="text" required autocomplete="organization" placeholder="לדוגמה: סטודיו לומן">
         </div>
         <div class="form-field">
           <label for="owner-name">שם איש קשר</label>
-          <input id="owner-name" type="text" required placeholder="השם המלא שלכם">
+          <input id="owner-name" type="text" required autocomplete="name" placeholder="השם המלא שלכם">
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-field">
           <label for="phone">טלפון</label>
-          <input id="phone" type="tel" required placeholder="050-0000000">
+          <input id="phone" type="tel" required autocomplete="tel" placeholder="050-0000000">
         </div>
         <div class="form-field">
           <label for="city">עיר פעילות</label>

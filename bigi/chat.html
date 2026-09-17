@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
 <title>ההודעות שלי — ביגי ספקים</title>
 <meta name="description" content="שיחות בתוך האתר בינכם לבין ספקי האירועים שפניתם אליהם בביגי ספקים.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +21,7 @@
       <a href="index.html">בית</a>
       <a href="vendors.html">כל הספקים</a>
       <a href="join.html">הצטרפות כספק</a>
+      <a href="chat.html" class="nav-mobile-only nav-xs-only">💬 ההודעות שלי</a>
       <a href="login.html" class="nav-mobile-only" data-guest-only>כניסת ספקים</a>
       <a href="dashboard.html" class="nav-mobile-only" data-vendor-only hidden>לוח בקרה</a>
     </nav>
@@ -81,7 +83,7 @@
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-typing" id="chat-typing" hidden>מקליד/ה...</div>
         <form class="chat-input-row" id="chat-input-form">
-          <input type="text" id="chat-input" placeholder="כתבו הודעה..." autocomplete="off">
+          <input type="text" id="chat-input" placeholder="כתבו הודעה..." autocomplete="off" enterkeyhint="send">
           <button type="submit" class="btn btn-primary btn-sm">שליחה</button>
         </form>
       </div>
