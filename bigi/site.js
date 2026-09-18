@@ -1008,14 +1008,24 @@
   const Assistant = {
     chatKey: 'bigi_assistant_chat',
     listKey: 'bigi_checklist',
+    closedKey: 'bigi_checklist_closed',
     load(key){ try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; } },
     save(key, value){ try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){} },
     get history(){ return this.load(this.chatKey); },
     set history(v){ this.save(this.chatKey, v.slice(-40)); },
     get checklist(){ return this.load(this.listKey).filter(id => CATEGORIES.some(c => c.id === id)); },
     set checklist(v){ this.save(this.listKey, v); },
+    // Closing the list keeps it closed; only a new conversation brings it back.
+    get listClosed(){ try{ return localStorage.getItem(this.closedKey) === '1'; }catch(e){ return false; } },
+    set listClosed(v){
+      try{ v ? localStorage.setItem(this.closedKey, '1') : localStorage.removeItem(this.closedKey); }catch(e){}
+    },
     reset(){
-      try{ localStorage.removeItem(this.chatKey); localStorage.removeItem(this.listKey); }catch(e){}
+      try{
+        localStorage.removeItem(this.chatKey);
+        localStorage.removeItem(this.listKey);
+        localStorage.removeItem(this.closedKey);
+      }catch(e){}
     }
   };
 
@@ -1058,10 +1068,13 @@
     checklist.hidden = true;
     checklist.setAttribute('aria-label', 'רשימת הספקים שלי');
     checklist.innerHTML = `
-      <button type="button" class="checklist-toggle" aria-expanded="true">
-        <span>📋 הרשימה שלי</span>
-        <span class="checklist-progress"></span>
-      </button>
+      <div class="checklist-head">
+        <button type="button" class="checklist-toggle" aria-expanded="true">
+          <span>📋 הרשימה שלי</span>
+          <span class="checklist-progress"></span>
+        </button>
+        <button type="button" class="checklist-dismiss" aria-label="סגירת הרשימה" title="סגירת הרשימה">✕</button>
+      </div>
       <ul class="checklist-items"></ul>`;
 
     document.body.append(fab, panel, checklist);
@@ -1108,8 +1121,8 @@
 
     function renderChecklist(){
       const ids = Assistant.checklist;
-      checklist.hidden = ids.length === 0;
-      if(!ids.length) return;
+      checklist.hidden = ids.length === 0 || Assistant.listClosed;
+      if(checklist.hidden) return;
       const done = doneCategories();
       const list = $('.checklist-items', checklist);
       list.replaceChildren();
@@ -1192,6 +1205,11 @@
     $('.checklist-toggle', checklist).addEventListener('click', () => {
       const open = checklist.classList.toggle('collapsed');
       $('.checklist-toggle', checklist).setAttribute('aria-expanded', String(!open));
+    });
+
+    $('.checklist-dismiss', checklist).addEventListener('click', () => {
+      Assistant.listClosed = true;
+      checklist.hidden = true;
     });
 
     document.addEventListener('favorites:change', renderChecklist);
