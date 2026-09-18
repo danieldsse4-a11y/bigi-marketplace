@@ -8,7 +8,7 @@ function photoRow(n, removable) {
       <div style="flex:1;">
         <label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה ${n}</label>
         <input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>
-        <input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" class="photo-caption-input">
+        <input type="text" name="productCaptions" maxlength="200" placeholder="תיאור קצר לתמונה (מומלץ)" class="photo-caption-input">
       </div>
       ${removable ? `<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>` : ''}
     </div>`;
@@ -76,7 +76,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
 
         <div class="form-field">
           <label>תמונות מוצר * (לפחות ${MIN_PRODUCT_IMAGES})</label>
-          <div class="field-hint" style="margin-bottom:12px;">JPG / PNG / WebP, עד 5MB לתמונה. לכל תמונה יש שדה תיאור משלה מיד מתחתיה.</div>
+          <div class="field-hint" style="margin-bottom:12px;">JPG / PNG / WebP, עד 5MB לתמונה. הוספת תיאור קצר לכל תמונה מומלצת, אך אינה חובה.</div>
           <div id="product-photo-rows">
             ${Array.from({ length: MIN_PRODUCT_IMAGES }, (_, i) => photoRow(i + 1, false)).join('')}
           </div>
@@ -170,7 +170,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
             '<div style="flex:1;">' +
               '<label style="font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;">תמונה</label>' +
               '<input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>' +
-              '<input type="text" name="productCaptions" required placeholder="תיאור המוצר בתמונה זו" class="photo-caption-input">' +
+              '<input type="text" name="productCaptions" maxlength="200" placeholder="תיאור קצר לתמונה (מומלץ)" class="photo-caption-input">' +
             '</div>' +
             '<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>';
           rowsContainer.appendChild(div);
