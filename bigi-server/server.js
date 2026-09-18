@@ -42,8 +42,13 @@ if (!storage.USE_SUPABASE && process.env.RENDER) {
 
 const app = express();
 app.disable('x-powered-by');
+// Render puts one proxy in front of the app. Without this, every visitor
+// looks like the proxy's address and they all share one rate-limit bucket.
+if (process.env.RENDER) app.set('trust proxy', 1);
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+// The assistant re-sends the whole conversation each turn, so it needs room.
+app.use('/api/assistant', express.json({ limit: '200kb' }));
 app.use('/api', express.json({ limit: '10kb' }));
 
 // Minimal, dependency-free security headers.
@@ -504,7 +509,7 @@ app.get('/admin-suppliers/accounts', requireDb, auth.requireAdmin, (req, res) =>
   res.send(accountsPage({ adminEmail: req.adminEmail, accounts: auth.accountRows(db.load()) }));
 });
 
-app.get('/admin-suppliers/email', auth.requireAdmin, async (req, res) => {
+app.get('/admin-suppliers/email', requireDb, auth.requireAdmin, async (req, res) => {
   res.send(emailPage({ adminEmail: req.adminEmail, status: await emailStatus() }));
 });
 
@@ -514,6 +519,7 @@ app.post(
   '/admin-suppliers/email/test',
   express.json({ limit: '1kb' }),
   requireSameOrigin,
+  requireDb,
   auth.requireAdmin,
   emailTestLimiter,
   async (req, res) => {
@@ -657,7 +663,8 @@ app.post(
    ========================================================================== */
 app.get('/supplier/view/:uuid', requireDb, (req, res) => {
   const data = db.load();
-  const supplier = data.suppliers[req.params.uuid];
+  // hasOwn: "/supplier/view/constructor" must be a 404, not Object's constructor.
+  const supplier = Object.hasOwn(data.suppliers, req.params.uuid) ? data.suppliers[req.params.uuid] : null;
   if (!supplier) return res.status(404).send('לא נמצא.');
   if (!supplier.isPublic) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   // The reviews tab differs per viewer (write form, login prompt, "your review"),

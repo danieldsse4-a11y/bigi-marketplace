@@ -60,10 +60,13 @@ const replySchema = z.object({
   categories: z.array(z.enum(CATEGORY_IDS)),
 });
 
-// What the browser is allowed to send back as conversation history.
+// What the browser is allowed to send back as conversation history. The
+// assistant's own replies (the summary above all) run longer than a person's
+// message, so only the person's messages get the short cap.
+const MAX_REPLY_CHARS = 4000;
 const historySchema = z.array(z.object({
   role: z.enum(['user', 'assistant']),
-  content: z.string().min(1).max(MAX_MESSAGE_CHARS),
+  content: z.string().min(1).max(MAX_REPLY_CHARS),
 })).min(1).max(MAX_HISTORY_MESSAGES);
 
 function validateHistory(messages) {
@@ -71,6 +74,7 @@ function validateHistory(messages) {
   if (!parsed.success) return { error: 'שיחה לא תקינה. רעננו את העמוד ונסו שוב.' };
   const history = parsed.data;
   if (history[history.length - 1].role !== 'user') return { error: 'שיחה לא תקינה.' };
+  if (history.some((m) => m.role === 'user' && m.content.length > MAX_MESSAGE_CHARS)) return { error: 'שיחה לא תקינה.' };
   return { history };
 }
 
