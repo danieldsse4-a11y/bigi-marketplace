@@ -94,6 +94,33 @@ async function saveImage(supplierId, file) {
   return supabase.storage.from(IMAGES_BUCKET).getPublicUrl(objectPath).data.publicUrl;
 }
 
+// Removes every photo belonging to one supplier. Returns how many were
+// deleted. Never throws: the profile is already gone from the database by the
+// time this runs, and leftover files must not turn that into an error.
+async function deleteSupplierImages(supplierId) {
+  try {
+    if (!USE_SUPABASE) {
+      const dir = path.join(LOCAL_UPLOADS_DIR, 'suppliers', supplierId);
+      if (!fs.existsSync(dir)) return 0;
+      const count = fs.readdirSync(dir).length;
+      fs.rmSync(dir, { recursive: true, force: true });
+      return count;
+    }
+    const prefix = `suppliers/${supplierId}`;
+    const { data, error } = await supabase.storage.from(IMAGES_BUCKET).list(prefix, { limit: 100 });
+    if (error) throw new Error(error.message);
+    if (!data.length) return 0;
+    const { error: removeError } = await supabase.storage
+      .from(IMAGES_BUCKET)
+      .remove(data.map((f) => `${prefix}/${f.name}`));
+    if (removeError) throw new Error(removeError.message);
+    return data.length;
+  } catch (err) {
+    console.error(`Could not delete photos for supplier ${supplierId}:`, err.message);
+    return 0;
+  }
+}
+
 module.exports = {
   USE_SUPABASE,
   LOCAL_UPLOADS_DIR,
@@ -101,4 +128,5 @@ module.exports = {
   readDb,
   writeDb,
   saveImage,
+  deleteSupplierImages,
 };

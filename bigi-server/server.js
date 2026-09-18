@@ -17,6 +17,7 @@ const { categoryById } = require('./lib/siteData');
 const { messagePage, escapeHtml } = require('./views/layout');
 const { createFormPage, successPage } = require('./views/adminForm');
 const { profilesPage } = require('./views/adminProfiles');
+const { accountsPage } = require('./views/adminAccounts');
 const { featuredPage } = require('./views/adminFeatured');
 const { supplierViewPage } = require('./views/supplierView');
 
@@ -94,6 +95,7 @@ const adminVerifyLimiter = limiter(60, 5, 'יותר מדי בקשות לקישו
 const supplierSubmitLimiter = limiter(60, 10, 'יותר מדי ניסיונות שליחה. נסו שוב מאוחר יותר.');
 const createLimiter = limiter(60, 20, 'יותר מדי בקשות ליצירת פרופיל. נסו שוב מאוחר יותר.');
 const visibilityLimiter = limiter(15, 150, 'יותר מדי שינויים. נסו שוב בעוד כמה דקות.');
+const deleteLimiter = limiter(15, 30, 'יותר מדי מחיקות. נסו שוב בעוד כמה דקות.');
 const resetRequestLimiter = limiter(60, 5, 'יותר מדי בקשות איפוס. נסו שוב מאוחר יותר.');
 const resetConfirmLimiter = limiter(15, 10, 'יותר מדי ניסיונות. נסו שוב בעוד כמה דקות.');
 // Each assistant message costs money, so cap it per visitor.
@@ -349,6 +351,25 @@ app.get('/admin-suppliers/featured', requireDb, auth.requireAdmin, (req, res) =>
   res.send(featuredPage({ adminEmail: req.adminEmail, ...catalog.featuredRows(db.load()) }));
 });
 
+app.get('/admin-suppliers/accounts', requireDb, auth.requireAdmin, (req, res) => {
+  res.send(accountsPage({ adminEmail: req.adminEmail, accounts: auth.accountRows(db.load()) }));
+});
+
+app.post(
+  '/admin-suppliers/accounts/:id/delete',
+  express.json({ limit: '1kb' }),
+  requireSameOrigin,
+  requireDb,
+  auth.requireAdmin,
+  deleteLimiter,
+  async (req, res) => {
+    const { error, deleted } = await auth.deleteAccount(req.params.id, { actingUserId: req.user.id });
+    if (error) return res.status(error === 'החשבון לא נמצא' ? 404 : 409).json({ error });
+    console.log(`Admin ${req.adminEmail} deleted the account ${deleted.email}`);
+    res.json({ deleted });
+  }
+);
+
 app.post(
   '/admin-suppliers/featured',
   express.json({ limit: '10kb' }),
@@ -377,6 +398,27 @@ app.post(
     const found = await db.withDb((data) => catalog.setPublished(data, req.params.key, published, req.adminEmail));
     if (!found) return res.status(404).json({ error: 'הפרופיל לא נמצא' });
     res.json({ key: req.params.key, published });
+  }
+);
+
+// Deleting is permanent: the profile leaves the database and its uploaded
+// photos are removed. Sample suppliers ship with the site, so they can only be
+// switched to demo — never deleted.
+app.post(
+  '/admin-suppliers/profiles/:key/delete',
+  express.json({ limit: '1kb' }),
+  requireSameOrigin,
+  requireDb,
+  auth.requireAdmin,
+  deleteLimiter,
+  async (req, res) => {
+    const deleted = await db.withDb((data) => catalog.deleteProfile(data, req.params.key));
+    if (!deleted) {
+      return res.status(404).json({ error: 'הפרופיל לא נמצא. ספקים לדוגמה אפשר להחזיר לדמו, אבל לא למחוק.' });
+    }
+    const photos = await storage.deleteSupplierImages(deleted.id);
+    console.log(`Admin ${req.adminEmail} deleted the profile "${deleted.name}" (${deleted.id}) and ${photos} photo(s)`);
+    res.json({ key: req.params.key, name: deleted.name, photos });
   }
 );
 

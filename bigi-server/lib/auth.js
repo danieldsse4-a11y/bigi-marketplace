@@ -211,9 +211,60 @@ async function resetPassword(token, newPassword) {
   });
 }
 
+/* ---------- Accounts list + deletion (admin area) ---------- */
+
+// Everyone who registered, newest first, with whether they own a profile.
+function accountRows(db) {
+  const profileByOwner = new Map(
+    Object.values(db.suppliers).filter((s) => s.ownerUserId).map((s) => [s.ownerUserId, s])
+  );
+  return Object.values(db.users)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .map((u) => {
+      const profile = profileByOwner.get(u.id);
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+        isAdmin: isAdminUser(u),
+        adminPending: isWhitelisted(u.email) && !u.adminVerifiedAt,
+        profileName: profile ? profile.name : null,
+        profilePublished: Boolean(profile && profile.isPublic),
+      };
+    });
+}
+
+// Deletes an account together with its sessions and any pending links.
+// Returns { error } when it must not happen — an account that still owns a
+// supplier profile is refused, so a live listing can't lose its owner by
+// accident, and an admin cannot delete the account they are signed in with.
+async function deleteAccount(userId, { actingUserId }) {
+  return withDb((db) => {
+    const user = db.users[userId];
+    if (!user) return { error: 'החשבון לא נמצא' };
+    if (userId === actingUserId) return { error: 'אי אפשר למחוק את החשבון שאיתו אתם מחוברים כרגע' };
+
+    const profile = Object.values(db.suppliers).find((s) => s.ownerUserId === userId);
+    if (profile) return { error: `לחשבון הזה יש פרופיל ספק ("${profile.name}"). מחקו קודם את הפרופיל ב"כל הפרופילים".` };
+
+    for (const [id, session] of Object.entries(db.sessions)) {
+      if (session.userId === userId) delete db.sessions[id];
+    }
+    for (const [token, entry] of Object.entries(db.magicTokens)) {
+      if (entry.userId === userId) delete db.magicTokens[token];
+    }
+    delete db.users[userId];
+    return { deleted: { name: user.name, email: user.email } };
+  });
+}
+
 module.exports = {
   ROLES,
   SESSION_COOKIE,
+  accountRows,
+  deleteAccount,
   getWhitelist,
   isWhitelisted,
   normalizeEmail,

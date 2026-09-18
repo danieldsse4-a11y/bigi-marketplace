@@ -25,6 +25,7 @@ function createdRow(row) {
         <div class="profile-links">
           <a href="${escapeHtml(row.viewUrl)}" target="_blank" rel="noopener">צפייה ↗</a>
           <button type="button" data-copy="${escapeHtml(row.viewUrl)}">העתקת קישור</button>
+          <button type="button" class="delete-link" data-delete-profile="${escapeHtml(row.key)}" data-name="${escapeHtml(row.name)}">מחיקה</button>
         </div>
       </div>
       ${visibilitySwitch(row)}
@@ -149,6 +150,33 @@ function profilesPage({ adminEmail, fromSuppliers, created, samples }) {
                 showToast('השינוי לא נשמר — נסו שוב', true);
               })
               .finally(function(){ sw.removeAttribute('aria-busy'); });
+          });
+        });
+
+        document.querySelectorAll('[data-delete-profile]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            var name = btn.dataset.name;
+            if (!window.confirm('למחוק את הפרופיל "' + name + '"?\\n\\nהפרופיל והתמונות שהועלו יימחקו לצמיתות ואי אפשר לבטל את הפעולה.')) return;
+            btn.disabled = true;
+            fetch('/admin-suppliers/profiles/' + encodeURIComponent(btn.dataset.deleteProfile) + '/delete', {
+              method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+            })
+              .then(function(r){
+                if (r.status === 401) { location.href = '/admin-suppliers/login'; throw new Error('auth'); }
+                return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+              })
+              .then(function(res){
+                if (!res.ok) throw new Error(res.data.error || 'המחיקה נכשלה');
+                var row = btn.closest('.profile-row');
+                row.parentNode.removeChild(row);
+                updateCounts();
+                showToast('הפרופיל "' + name + '" נמחק');
+              })
+              .catch(function(err){
+                if (err.message === 'auth') return;
+                btn.disabled = false;
+                showToast(err.message, true);
+              });
           });
         });
 

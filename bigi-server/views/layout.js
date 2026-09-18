@@ -14,6 +14,7 @@ function adminTabs(active) {
     ${tab('/admin-suppliers', 'create', '➕ פרופיל חדש')}
     ${tab('/admin-suppliers/profiles', 'profiles', '📋 כל הפרופילים')}
     ${tab('/admin-suppliers/featured', 'featured', '⭐ מומלצים')}
+    ${tab('/admin-suppliers/accounts', 'accounts', '👥 חשבונות')}
   </nav>`;
 }
 
@@ -81,6 +82,23 @@ function page({ title, body, extraHead = '', wide = false }) {
   .profile-meta{ color:var(--muted); font-size:12.5px; margin-top:2px; }
   .profile-links{ display:flex; gap:12px; margin-top:6px; font-size:13px; font-weight:700; }
   .profile-links a,.profile-links button{ color:var(--primary); padding:4px 0; font-weight:700; font-size:13px; }
+  .profile-links .delete-link{ color:var(--accent); }
+  .profile-links .delete-link:hover{ text-decoration:underline; }
+  .profile-links .delete-link[disabled]{ color:var(--muted); cursor:default; text-decoration:none; }
+  /* The chips explain why a delete button is disabled, so the name wraps
+     instead of cutting them off on a narrow screen. */
+  .account-row .profile-info{ min-width:0; }
+  .account-row .profile-name{ white-space:normal; overflow:visible; text-overflow:clip; }
+  .account-chip{ display:inline-block; margin-inline-start:6px; padding:2px 8px; border-radius:var(--radius-pill); font-size:11.5px; font-weight:800; vertical-align:middle; }
+  .account-chip.admin{ background:var(--primary-soft); color:var(--primary); }
+  .account-chip.pending{ background:#FFF4DB; color:#9A6700; }
+  .account-chip.profile{ background:var(--bg-soft); color:var(--ink-soft); }
+  .delete-btn{
+    flex-shrink:0; padding:9px 16px; border-radius:var(--radius-pill); font-weight:700; font-size:13px;
+    background:var(--accent-soft); color:#B8323C; transition:background .2s, color .2s;
+  }
+  .delete-btn:hover:not([disabled]){ background:var(--accent); color:#fff; }
+  .delete-btn[disabled]{ background:var(--bg-soft); color:var(--muted); cursor:default; }
   .empty-profiles{ text-align:center; padding:26px 12px; color:var(--muted); border:1px dashed var(--line); border-radius:var(--radius-md); }
   .empty-profiles .btn{ margin-top:14px; }
 

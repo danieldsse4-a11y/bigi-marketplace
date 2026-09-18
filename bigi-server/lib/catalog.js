@@ -117,6 +117,18 @@ function ownProfile(db, userId) {
   };
 }
 
+// Removes a profile an admin (or a supplier) created, and takes it out of the
+// "מומלצים" list. Returns the deleted profile so its photos can be cleaned up,
+// or null when the key doesn't match one. Sample suppliers live in the site's
+// own data file and can only be switched to demo, never deleted.
+function deleteProfile(db, key) {
+  const supplier = db.suppliers[key];
+  if (!supplier) return null;
+  delete db.suppliers[key];
+  if (Array.isArray(db.featured)) db.featured = db.featured.filter((k) => k !== key);
+  return supplier;
+}
+
 // Returns false when the key doesn't match any profile.
 function setPublished(db, key, published, adminEmail) {
   const stamp = { at: new Date().toISOString(), by: adminEmail };
@@ -188,4 +200,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, ownProfile, setPublished, dataJs };
+module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, ownProfile, setPublished, deleteProfile, dataJs };
