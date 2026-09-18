@@ -35,7 +35,10 @@ function page({ title, body, extraHead = '', wide = false }) {
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔐</text></svg>">
 <style>
   body{ background:var(--bg-soft); }
-  .admin-wrap{ max-width:640px; margin:0 auto; padding:48px 24px 80px; }
+  /* One width for every admin page: the tab bar and logo must not move when
+     you switch tabs. Only the card inside narrows on the form pages. */
+  .admin-wrap{ max-width:880px; margin:0 auto; padding:48px 24px 80px; }
+  .admin-wrap:not(.wide) .admin-card{ max-width:592px; margin-inline:auto; }
   .admin-card{ background:#fff; border-radius:var(--radius-xl); box-shadow:var(--shadow-lg); padding:40px; }
   .admin-card h1{ font-size:22px; margin-bottom:8px; }
   .admin-card > p.lead{ color:var(--muted); margin-bottom:28px; }
@@ -65,13 +68,13 @@ function page({ title, body, extraHead = '', wide = false }) {
   .bg-preview-note{ background:var(--primary-soft); color:var(--primary); border-radius:var(--radius-md); padding:10px 14px; font-size:12.5px; margin-top:8px; }
   .link-box{ display:flex; gap:8px; align-items:center; background:var(--bg-soft); border:1px dashed var(--line); border-radius:var(--radius-md); padding:12px 14px; font-size:13px; word-break:break-all; }
   .admin-card-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
-  .admin-wrap.wide{ max-width:880px; }
   /* The only way back to the site from inside the admin area */
-  .admin-home{ display:inline-flex; width:max-content; font-size:21px; margin-bottom:16px; padding:4px 2px; transition:opacity .2s; }
+  .admin-home{ display:inline-flex; width:max-content; vertical-align:middle; font-size:21px; margin-bottom:16px; margin-inline-end:20px; padding:4px 2px; transition:opacity .2s; }
   .admin-home:hover{ opacity:.72; }
   .admin-home:focus-visible{ outline:3px solid var(--primary-light); outline-offset:4px; border-radius:8px; }
-  .admin-tabs{ display:flex; gap:6px; background:#fff; border-radius:var(--radius-pill); padding:5px; box-shadow:var(--shadow-sm); margin-bottom:18px; }
-  .admin-tabs a{ flex:1; text-align:center; padding:11px 14px; border-radius:var(--radius-pill); font-weight:700; font-size:14px; color:var(--muted); }
+  /* Sized to its own labels, so the bar is identical on every tab */
+  .admin-tabs{ display:inline-flex; width:max-content; max-width:100%; vertical-align:middle; gap:6px; background:#fff; border-radius:var(--radius-pill); padding:5px; box-shadow:var(--shadow-sm); margin-bottom:18px; }
+  .admin-tabs a{ flex:0 0 auto; text-align:center; padding:11px 18px; border-radius:var(--radius-pill); font-weight:700; font-size:14px; color:var(--muted); white-space:nowrap; }
   .admin-tabs a.active{ background:var(--primary-soft); color:var(--primary); }
 
   .profiles-filters{ display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 18px; }
@@ -167,8 +170,9 @@ function page({ title, body, extraHead = '', wide = false }) {
     .profile-thumb{ width:48px; height:48px; font-size:22px; }
     .profile-meta{ font-size:12px; }
     .profiles-filters button{ padding:10px 14px; }
-    .admin-tabs{ gap:2px; padding:4px; }
-    .admin-tabs a{ padding:10px 6px; font-size:13px; }
+    /* Too narrow to hug the labels — share the width out instead */
+    .admin-tabs{ display:flex; width:auto; gap:2px; padding:4px; }
+    .admin-tabs a{ flex:1; padding:10px 6px; font-size:13px; white-space:normal; }
     .featured-row{ gap:8px 10px; padding:10px; flex-wrap:wrap; }
     .featured-row .profile-info{ flex:1 1 150px; }
     .featured-row .profile-name{ white-space:normal; }
