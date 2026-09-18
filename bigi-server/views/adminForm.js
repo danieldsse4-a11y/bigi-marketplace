@@ -84,6 +84,13 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
         </div>
 
         <div class="form-field">
+          <label>סרטון (לא חובה)</label>
+          <div class="field-hint" style="margin-bottom:12px;">אפשר להעלות MP4, WebM או MOV עד 45MB, או להדביק קישור מיוטיוב, אינסטגרם, טיקטוק או Vimeo.</div>
+          <input type="file" id="video-input" name="video" accept="video/mp4,video/webm,video/quicktime">
+          <input id="video-link" name="videoLink" type="url" inputmode="url" value="${v('videoLink')}" placeholder="או הדביקו קישור לסרטון: https://youtube.com/..." style="margin-top:10px;">
+        </div>
+
+        <div class="form-field">
           <label for="background-image-input">תמונת רקע לפרופיל *</label>
           <input type="file" id="background-image-input" name="backgroundImage" accept="image/png,image/jpeg,image/webp" required>
           <div class="bg-preview-note">
@@ -112,9 +119,8 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
         // The browser's own file control is English and left-to-right; the real
         // input stays in the page (still focusable when the form is invalid)
         // but sits transparent on top of a Hebrew label.
-        var EMPTY = 'לא נבחרה תמונה';
-        function enhanceFileInput(input){
-          if(input.dataset.enhanced) return;
+        function enhanceFileInput(input, buttonText, emptyText){
+          if(!input || input.dataset.enhanced) return;
           input.dataset.enhanced = '1';
           var drop = document.createElement('label');
           drop.className = 'file-drop';
@@ -122,22 +128,37 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           drop.appendChild(input);
           var button = document.createElement('span');
           button.className = 'file-drop-btn';
-          button.textContent = 'בחרו תמונה';
+          button.textContent = buttonText || 'בחרו תמונה';
           var fileName = document.createElement('span');
           fileName.className = 'file-drop-name';
-          fileName.textContent = EMPTY;
+          var empty = emptyText || 'לא נבחרה תמונה';
+          fileName.textContent = empty;
           drop.appendChild(button);
           drop.appendChild(fileName);
           input.addEventListener('change', function(){
             var picked = input.files && input.files[0];
-            fileName.textContent = picked ? picked.name : EMPTY;
+            fileName.textContent = picked ? picked.name : empty;
             drop.classList.toggle('has-file', Boolean(picked));
           });
         }
         function enhanceAll(){
-          document.querySelectorAll('input[type=file]').forEach(enhanceFileInput);
+          document.querySelectorAll('input[type=file]:not(#video-input)').forEach(function(input){ enhanceFileInput(input); });
+          enhanceFileInput(document.getElementById('video-input'), 'בחרו סרטון', 'לא נבחר סרטון');
         }
         enhanceAll();
+
+        var videoInput = document.getElementById('video-input');
+        var videoLink = document.getElementById('video-link');
+        function syncVideoChoice(){
+          var hasFile = Boolean(videoInput.files && videoInput.files.length);
+          var hasLink = Boolean(videoLink.value.trim());
+          videoLink.disabled = hasFile;
+          videoInput.disabled = hasLink;
+          if(hasFile) videoLink.value = '';
+        }
+        videoInput.addEventListener('change', syncVideoChoice);
+        videoLink.addEventListener('input', syncVideoChoice);
+        syncVideoChoice();
 
         addBtn.addEventListener('click', function(){
           var rows = rowsContainer.querySelectorAll('[data-photo-row]');
@@ -167,7 +188,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
         var form = document.getElementById('supplier-form');
         var btn = document.getElementById('submit-btn');
         form.addEventListener('submit', function(){
-          btn.textContent = 'שולח ומעלה תמונות...';
+          btn.textContent = 'שולח ומעלה מדיה...';
           btn.style.pointerEvents = 'none';
         });
       })();
