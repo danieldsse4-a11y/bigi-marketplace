@@ -26,18 +26,6 @@
   const profileUrl = (v) => v.url || `vendor.html?id=${encodeURIComponent(v.id)}`;
   const formatPrice = (n) => `₪${Number(n).toLocaleString('he-IL')}`;
 
-  /* ---------- Compare state (localStorage) ---------- */
-  const CompareStore = {
-    key: 'bigi_compare',
-    get(){ try{ return (JSON.parse(localStorage.getItem(this.key)) || []).map(idOf); }catch(e){ return []; } },
-    set(list){ localStorage.setItem(this.key, JSON.stringify(list)); document.dispatchEvent(new CustomEvent('compare:change')); },
-    add(id){ const l = this.get(); if(!l.includes(id) && l.length < 4){ l.push(id); this.set(l);} return this.get(); },
-    remove(id){ this.set(this.get().filter(x=>x!==id)); },
-    has(id){ return this.get().includes(id); },
-    clear(){ this.set([]); }
-  };
-  window.CompareStore = CompareStore;
-
   /* ---------- Favorites state (localStorage) ---------- */
   const FavoritesStore = {
     key: 'bigi_favorites',
@@ -318,7 +306,6 @@
       <div class="vendor-media ${v.image ? 'has-photo' : v.grad}"${v.image ? ` style="background-image:url('${esc(encodeURI(v.image).replace(/'/g, '%27'))}')"` : ''}>
         ${v.badge ? `<span class="badge ${badgeClass[v.badge] || 'badge-new'}">${esc(v.badge)}</span>` : ''}
         <button class="vendor-fav ${isFav?'active':''}" aria-label="הוסף למועדפים" data-fav="${id}">${isFav?'♥':'♡'}</button>
-        <button class="vendor-compare-btn ${CompareStore.has(v.id)?'active':''}" data-compare="${id}">⇄ השוואה</button>
         ${v.image ? '' : esc(v.emoji)}
       </div>
       <div class="vendor-body">
@@ -362,7 +349,7 @@
     bindCardEvents(track);
   }
 
-  /* ---------- Card interactions: fav + compare ---------- */
+  /* ---------- Card interactions: save to favourites ---------- */
   function bindCardEvents(root=document){
     $$('[data-fav]', root).forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -372,52 +359,7 @@
         setTimeout(()=> btn.style.transform = '', 250);
       });
     });
-    $$('[data-compare]', root).forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const id = idOf(btn.dataset.compare);
-        if(CompareStore.has(id)){ CompareStore.remove(id); btn.classList.remove('active'); }
-        else if(CompareStore.get().length >= 4){
-          btn.textContent = 'מקסימום 4 ספקים';
-          setTimeout(() => { btn.textContent = '⇄ השוואה'; }, 1600);
-        }
-        else { CompareStore.add(id); btn.classList.add('active'); }
-      });
-    });
   }
-
-  /* ---------- Header compare pill + compare bar (shared) ---------- */
-  function renderCompareUI(){
-    const pill = $('#compare-pill-count');
-    const bar = $('#compare-bar');
-    const list = CompareStore.get();
-    if(pill) pill.textContent = list.length;
-    const pillWrap = $('#compare-pill');
-    if(pillWrap) pillWrap.hidden = list.length === 0;
-
-    if(bar){
-      const items = $('#compare-items');
-      if(list.length === 0){
-        bar.classList.remove('open');
-      } else {
-        bar.classList.add('open');
-        items.innerHTML = list.map(id => {
-          const v = findVendor(id);
-          if(!v) return '';
-          return `<div class="compare-chip-item"><span class="mini ${v.grad}">${esc(v.emoji)}</span>${esc(v.name)}<button data-compare-remove="${esc(v.id)}" aria-label="הסרה מההשוואה">✕</button></div>`;
-        }).join('');
-        $('#compare-count-badge').textContent = list.length;
-        $$('[data-compare-remove]', items).forEach(btn => {
-          btn.addEventListener('click', () => {
-            const id = idOf(btn.dataset.compareRemove);
-            CompareStore.remove(id);
-            $$('[data-compare]').filter(b => idOf(b.dataset.compare) === id).forEach(b=>b.classList.remove('active'));
-          });
-        });
-      }
-    }
-  }
-  document.addEventListener('compare:change', renderCompareUI);
 
   /* ---------- Header favorites link + card sync (shared) ---------- */
   function renderFavoritesUI(){
@@ -732,7 +674,6 @@
 
     syncControls();
     render();
-    renderCompareUI();
   }
 
   /* ---------- Vendor profile page ---------- */
@@ -816,18 +757,6 @@
     waBtn.href = whatsappLink(v);
     waBtn.innerHTML = whatsappIconSvg + '<span>צרו קשר בוואטסאפ</span>';
 
-    // Floating compare button
-    const floatBtn = $('#floating-compare');
-    function syncFloat(){
-      floatBtn.classList.toggle('active', CompareStore.has(v.id));
-      floatBtn.querySelector('span').textContent = CompareStore.has(v.id) ? 'נוסף להשוואה ✓' : 'הוסיפו להשוואה';
-    }
-    floatBtn.addEventListener('click', () => {
-      if(CompareStore.has(v.id)) CompareStore.remove(v.id); else CompareStore.add(v.id);
-      syncFloat();
-    });
-    syncFloat();
-
     // Floating favorite button
     const favBtn = $('#floating-fav');
     function syncFav(){
@@ -840,8 +769,6 @@
       syncFav();
     });
     syncFav();
-
-    renderCompareUI();
   }
 
   /* ---------- New password page (link from the reset email) ---------- */
@@ -1266,7 +1193,6 @@
     initResetPasswordPage();
     initAssistant();
     initLiveTicker();
-    renderCompareUI();
     renderFavoritesUI();
     initReveal();
     Account.refresh();

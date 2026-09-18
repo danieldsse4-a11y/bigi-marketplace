@@ -142,13 +142,6 @@ h3{ font-size:20px; }
 .nav-toggle{ display:none; flex-direction:column; gap:5px; padding:8px; }
 .nav-toggle span{ width:22px; height:2px; background:var(--ink); border-radius:2px; }
 
-.compare-pill{
-  display:flex; align-items:center; gap:8px; padding:9px 16px;
-  border-radius:var(--radius-pill); background:var(--ink); color:#fff; font-weight:700; font-size:14px;
-  position:relative;
-}
-.compare-pill[hidden]{ display:none; }
-
 .nav-fav-link{
   position:relative; display:flex; align-items:center; justify-content:center;
   width:40px; height:40px; border-radius:50%; color:var(--ink-soft); flex-shrink:0;
@@ -201,11 +194,6 @@ h3{ font-size:20px; }
 .account-dropdown button:disabled{ opacity:.7; cursor:default; }
 .account-dropdown .account-logout{ color:#C0392B; margin-top:4px; border-top:1px solid var(--line); border-radius:0 0 10px 10px; }
 .account-dropdown .account-logout:hover{ background:var(--accent-soft); color:#C0392B; }
-.compare-pill .count{
-  background:var(--accent); color:#fff; border-radius:50%; width:20px; height:20px;
-  display:flex; align-items:center; justify-content:center; font-size:12px;
-}
-
 /* ---------- Buttons ---------- */
 .btn{
   position:relative; overflow:hidden;
@@ -414,15 +402,7 @@ h3{ font-size:20px; }
   transition:transform .3s var(--ease-spring), background .3s, color .3s;
 }
 .vendor-fav:hover{ transform:scale(1.15); }
-.vendor-fav.active{ background:var(--accent); color:#fff; }
-.vendor-compare-btn{
-  position:absolute; bottom:12px; inset-inline-start:12px; z-index:2;
-  padding:6px 12px; border-radius:var(--radius-pill); background:rgba(255,255,255,0.92); color:var(--ink);
-  font-size:12px; font-weight:700; display:flex; align-items:center; gap:5px;
-  transition:background .25s, color .25s, transform .3s var(--ease-spring);
-}
-.vendor-compare-btn:hover,.vendor-compare-btn.active{ background:var(--primary); color:#fff; }
-.vendor-body{ padding:18px; }
+.vendor-fav.active{ background:var(--accent); color:#fff; }.vendor-body{ padding:18px; }
 .vendor-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .vendor-body h4{ font-size:16.5px; }
 .vendor-tag{ font-size:12.5px; color:var(--muted); margin-bottom:10px; }
@@ -586,27 +566,6 @@ h3{ font-size:20px; }
 
 .load-more-wrap{ display:flex; justify-content:center; margin-top:36px; }
 
-/* Comparison bar */
-.compare-bar{
-  position:fixed; bottom:-140px; left:0; right:0; z-index:300;
-  background:var(--white); box-shadow:0 -12px 40px rgba(26,23,48,0.16);
-  border-top-left-radius:var(--radius-xl); border-top-right-radius:var(--radius-xl);
-  padding:20px 28px; transition:bottom .5s var(--ease-spring);
-}
-.compare-bar.open{ bottom:0; }
-.compare-bar-inner{ display:flex; align-items:center; gap:20px; max-width:1240px; margin:0 auto; }
-.compare-items{ display:flex; gap:12px; flex:1; overflow-x:auto; }
-.compare-chip-item{
-  display:flex; align-items:center; gap:8px; background:var(--bg-soft); border-radius:var(--radius-pill);
-  padding:6px 8px 6px 14px; font-size:13px; font-weight:700; white-space:nowrap; animation:chipIn .35s var(--ease-spring);
-}
-.compare-chip-item .mini{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; }
-.compare-chip-item button{ width:20px; height:20px; border-radius:50%; background:var(--line); font-size:11px; }
-.compare-count-badge{
-  width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px;
-  display:flex; align-items:center; justify-content:center; flex-shrink:0;
-}
-
 /* ==========================================================================
    VENDOR PROFILE PAGE
    ========================================================================== */
@@ -679,14 +638,7 @@ h3{ font-size:20px; }
 .review-days{ color:var(--muted); font-size:12.5px; }
 .review-text{ color:var(--ink-soft); font-size:14.5px; }
 
-.floating-actions{ position:fixed; bottom:28px; left:28px; z-index:250; display:flex; align-items:center; gap:12px; }
-.floating-compare-btn{
-  display:flex; align-items:center; gap:10px; padding:15px 24px;
-  background:var(--ink); color:#fff; border-radius:var(--radius-pill); font-weight:700;
-  box-shadow:var(--shadow-lg); transition:transform .35s var(--ease-spring);
-}
-.floating-compare-btn:hover{ transform:translateY(-4px) scale(1.03); }
-.floating-fav-btn{
+.floating-actions{ position:fixed; bottom:28px; left:28px; z-index:250; display:flex; align-items:center; gap:12px; }.floating-fav-btn{
   width:56px; height:56px; border-radius:50%; background:var(--white); font-size:26px; line-height:1;
   color:var(--accent);
   display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-lg);
@@ -918,12 +870,6 @@ h3{ font-size:20px; }
 /* The vendor page's own floating buttons share this corner, so the list sits
    above them there. */
 body:has(.floating-actions) .checklist-bar{ bottom:96px; }
-/* Everything floating sits above the compare bar when it slides up */
-body:has(.compare-bar.open) .assistant-fab{ bottom:104px; }
-body:has(.compare-bar.open) .assistant-panel{ bottom:172px; }
-body:has(.compare-bar.open) .checklist-bar{ bottom:104px; }
-body:has(.compare-bar.open):has(.floating-actions) .checklist-bar{ bottom:176px; }
-body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
 
 /* ==========================================================================
    RESPONSIVE
@@ -944,7 +890,6 @@ body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
   .logo{ font-size:20px; white-space:nowrap; flex-shrink:0; }
   .header-actions{ gap:4px; }
   .header-actions .nav-text-link,
-  .header-actions .compare-pill,
   .header-actions .header-extra,
   .search-card{ grid-template-columns:1fr; }
   .cat-grid{ grid-template-columns:repeat(3,1fr); }
@@ -999,15 +944,10 @@ body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
   /* Comfortable tap targets on cards */
   .vendor-fav{ width:40px; height:40px; font-size:17px; }
   .whatsapp-btn{ width:40px; height:40px; }
-  .vendor-compare-btn{ padding:11px 14px; }
   .filter-option{ padding:11px 0; }
   .filter-option input{ width:20px; height:20px; }
   .rating-chip{ padding:11px 4px; }
   .chip button{ width:26px; height:26px; font-size:12px; }
-  .compare-bar{ padding:12px 16px; }
-  .compare-bar-inner{ gap:10px; }
-  .compare-chip-item button{ width:28px; height:28px; }
-  body:has(.compare-bar.open) .site-footer{ padding-bottom:80px; }
 
   /* Vendor profile */
   .profile-hero{ padding:32px 0 80px; }
@@ -1019,7 +959,6 @@ body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
   .tab-panel{ padding:20px 14px; }
   .package-card{ padding:22px 18px; }
   .floating-actions{ bottom:16px; left:16px; }
-  .floating-compare-btn{ padding:13px 18px; font-size:14px; }
   .floating-fav-btn{ width:50px; height:50px; }
   body:has(.floating-actions) .site-footer{ padding-bottom:84px; }
 
@@ -1052,9 +991,6 @@ body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
   .assistant-input-row input{ font-size:16px; }
   .checklist-bar{ right:8px; left:8px; width:auto; bottom:76px; }
   .checklist-items{ max-height:38vh; }
-  body:has(.compare-bar.open) .assistant-fab{ bottom:92px; }
-  body:has(.compare-bar.open) .assistant-panel,
-  body:has(.compare-bar.open) .checklist-bar{ bottom:152px; }
 }
 
 @media (max-width:400px){
