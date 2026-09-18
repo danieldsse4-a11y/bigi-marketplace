@@ -11,6 +11,26 @@ function visibilitySwitch(row) {
   </button>`;
 }
 
+// "מומלץ" comes from the מומלצים tab and overrides anything chosen here, so a
+// featured profile is told that instead of being given a select that does nothing.
+function badgePicker(row) {
+  if (row.featured) return '<div class="badge-pick badge-pick-locked">התג נקבע בלשונית ⭐ מומלצים</div>';
+  const current = row.badge === undefined ? 'default' : row.badge;
+  const labels = [
+    ['default', `ברירת מחדל${row.defaultBadge ? ` (${row.defaultBadge})` : ' (ללא תג)'}`],
+    ['', 'ללא תג'],
+    ['חדש', '🟢 חדש'],
+    ['זמין השבוע', '🩷 זמין השבוע'],
+  ];
+  const options = labels
+    .map(([value, label]) => `<option value="${escapeHtml(value)}"${value === current ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+    .join('');
+  return `<label class="badge-pick">
+    <span class="badge-pick-label">תג</span>
+    <select class="badge-select" data-key="${escapeHtml(row.key)}" aria-label="${escapeHtml(row.name)} — תג">${options}</select>
+  </label>`;
+}
+
 function createdRow(row) {
   const meta = [row.categoryLabel, row.city, row.createdAt && `נוצר ${dateFmt.format(new Date(row.createdAt))}`]
     .filter(Boolean).map(escapeHtml).join(' · ');
@@ -27,6 +47,7 @@ function createdRow(row) {
           <button type="button" data-copy="${escapeHtml(row.viewUrl)}">העתקת קישור</button>
           <button type="button" class="delete-link" data-delete-profile="${escapeHtml(row.key)}" data-name="${escapeHtml(row.name)}">מחיקה</button>
         </div>
+        ${badgePicker(row)}
       </div>
       ${visibilitySwitch(row)}
     </div>`;
@@ -43,6 +64,7 @@ function sampleRow(row) {
         <div class="profile-links">
           <a href="${escapeHtml(row.viewUrl)}" target="_blank" rel="noopener">צפייה ↗</a>
         </div>
+        ${badgePicker(row)}
       </div>
       ${visibilitySwitch(row)}
     </div>`;
@@ -150,6 +172,35 @@ function profilesPage({ adminEmail, fromSuppliers, created, samples }) {
                 showToast('השינוי לא נשמר — נסו שוב', true);
               })
               .finally(function(){ sw.removeAttribute('aria-busy'); });
+          });
+        });
+
+        document.querySelectorAll('.badge-select').forEach(function(sel){
+          var previous = sel.value;
+          sel.addEventListener('change', function(){
+            var chosen = sel.value === 'default' ? null : sel.value;
+            sel.disabled = true;
+            fetch('/admin-suppliers/profiles/' + encodeURIComponent(sel.dataset.key) + '/badge', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ badge: chosen })
+            })
+              .then(function(r){
+                if (r.status === 401) { location.href = '/admin-suppliers/login'; throw new Error('auth'); }
+                if (!r.ok) throw new Error('http ' + r.status);
+                return r.json();
+              })
+              .then(function(){
+                previous = sel.value;
+                showToast('התג עודכן ✓');
+              })
+              .catch(function(err){
+                if (err.message === 'auth') return;
+                sel.value = previous;
+                showToast('התג לא נשמר — נסו שוב', true);
+              })
+              .finally(function(){ sel.disabled = false; });
           });
         });
 

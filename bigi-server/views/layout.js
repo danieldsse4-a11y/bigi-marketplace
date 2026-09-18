@@ -136,6 +136,15 @@ function page({ title, body, extraHead = '', wide = false }) {
   .visibility-switch[aria-busy="true"]{ opacity:.6; pointer-events:none; }
   .visibility-switch:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; border-radius:12px; }
 
+  .badge-pick{ display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .badge-pick-label{ font-size:12px; font-weight:800; color:var(--muted); }
+  .badge-select{
+    padding:7px 10px; border-radius:var(--radius-md); border:1.5px solid var(--line);
+    background:#fff; font-size:13px; font-weight:600; color:var(--ink); max-width:100%;
+  }
+  .badge-select:focus{ border-color:var(--primary); outline:none; box-shadow:0 0 0 3px var(--primary-soft); }
+  .badge-select:disabled{ opacity:.55; }
+  .badge-pick-locked{ margin-top:8px; font-size:12px; font-weight:700; color:var(--muted); }
   .featured-chip{ display:inline-block; margin-inline-start:6px; padding:2px 8px; border-radius:var(--radius-pill); background:#FFF4DB; color:#9A6700; font-size:11.5px; font-weight:800; vertical-align:middle; }
   .demo-note{ color:#9A6700; font-weight:700; }
 
