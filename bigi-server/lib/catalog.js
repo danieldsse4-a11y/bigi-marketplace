@@ -127,7 +127,17 @@ function featuredRows(db) {
 // A supplier's own profile, as shown in their dashboard.
 function ownProfile(db, userId) {
   const s = Object.values(db.suppliers).find((x) => x.ownerUserId === userId);
-  if (!s) return null;
+  return s ? editView(s) : null;
+}
+
+// Any profile by id, for an admin editing it. Sample suppliers live in the
+// site's data file, not the database, so they aren't found here.
+function profileForAdmin(db, id) {
+  const s = db.suppliers[id];
+  return s ? editView(s) : null;
+}
+
+function editView(s) {
   return {
     id: s.id,
     name: s.name,
@@ -236,4 +246,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, setBadge, BADGE_CHOICES, ownProfile, setPublished, deleteProfile, dataJs };
+module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, setBadge, BADGE_CHOICES, ownProfile, profileForAdmin, setPublished, deleteProfile, dataJs };

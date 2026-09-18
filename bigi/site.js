@@ -948,7 +948,12 @@
     const form = $('#edit-form');
     if(!form) return;
 
-    const states = ['edit-loading', 'edit-guest', 'edit-customer', 'edit-no-profile', 'edit-done'];
+    const states = ['edit-loading', 'edit-guest', 'edit-customer', 'edit-no-profile', 'edit-not-admin', 'edit-missing', 'edit-done'];
+    // ?id=… means an admin editing someone else's profile; without it, a
+    // supplier edits their own.
+    const adminId = new URLSearchParams(location.search).get('id');
+    const endpoint = adminId ? '/api/admin/profiles/' + encodeURIComponent(adminId) : '/api/supplier/profile';
+    const here = 'edit-profile.html' + (adminId ? '?id=' + encodeURIComponent(adminId) : '');
     const show = (id) => {
       states.forEach(s => $('#' + s).hidden = s !== id);
       form.hidden = id !== 'form';
@@ -969,6 +974,13 @@
       if(p.logo) $('#edit-logo-img').src = p.logo;
       removeLogo.checked = false;
       $('#edit-view-link').href = p.viewUrl;
+      if(adminId){
+        $('#edit-title').textContent = 'עריכת הפרופיל של ' + p.name;
+        document.title = 'עריכה: ' + p.name + ' — ביגי ספקים';
+        $('#edit-admin-banner').hidden = false;
+        $('#edit-back-link').href = '/admin-suppliers/profiles';
+        $('#edit-back-link').textContent = 'לכל הפרופילים';
+      }
     }
 
     logoInput.addEventListener('change', () => {
@@ -996,11 +1008,11 @@
       formData.set('socialLinks', JSON.stringify(extras.socialLinks));
       if(removeLogo.checked) formData.set('removeLogo', '1');
       if(logoInput.files && logoInput.files[0]) formData.set('logo', logoInput.files[0]);
-      const { ok, status, data } = await api('/api/supplier/profile', { method: 'PUT', formData });
+      const { ok, status, data } = await api(endpoint, { method: 'PUT', formData });
       submitBtn.disabled = false;
       submitBtn.textContent = 'שמירת השינויים';
       if(ok){ fill(data.profile); logoInput.value = ''; logoInput.dispatchEvent(new Event('change')); show('edit-done'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-      if(status === 401){ location.href = 'login.html?next=edit-profile.html'; return; }
+      if(status === 401){ location.href = 'login.html?next=' + encodeURIComponent(here); return; }
       errorBox.textContent = data.error || 'השמירה נכשלה. נסו שוב.';
       errorBox.hidden = false;
       errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1009,9 +1021,19 @@
     $('#edit-again').addEventListener('click', () => { show('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 
     Account.ready().then(async (user) => {
-      if(!user) return show('edit-guest');
+      if(!user){
+        $('#edit-guest a').href = 'login.html?next=' + encodeURIComponent(here);
+        return show('edit-guest');
+      }
+      if(adminId){
+        if(!user.isAdmin) return show('edit-not-admin');
+        const { ok, data } = await api(endpoint);
+        if(!ok || !data.profile) return show('edit-missing');
+        fill(data.profile);
+        return show('form');
+      }
       if(!isSupplierAccount(user)) return show('edit-customer');
-      const { ok, data } = await api('/api/supplier/profile');
+      const { ok, data } = await api(endpoint);
       if(!ok) return show('edit-guest');
       if(!data.profile) return show('edit-no-profile');
       fill(data.profile);

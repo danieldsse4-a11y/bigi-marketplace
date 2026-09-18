@@ -74,7 +74,9 @@ function reviewsPanel(supplier, list, viewer) {
         </li>`).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
 }
 
-function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOwner = false }) {
+function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOwner = false, isAdmin = false }) {
+  // An admin who owns this profile already has their own edit button.
+  const adminEdit = isAdmin && !isOwner;
   const {
     name, category, city, description, phone, contactEmail,
     backgroundImage, productImages, video,
@@ -289,12 +291,14 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
         <span>${escapeHtml(categoryLabel)}</span>
         ${city ? `<span>📍 ${escapeHtml(city)}</span>` : ''}
       </div>
-      ${(whatsapp || isOwner) ? `
+      ${(whatsapp || isOwner || adminEdit) ? `
       <div class="profile-hero-actions">
         ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noopener" class="btn whatsapp-cta">צרו קשר בוואטסאפ</a>` : ''}
         ${isOwner ? '<a href="/edit-profile.html" class="btn owner-edit-btn">✏️ עריכת הפרופיל שלי</a>' : ''}
+        ${adminEdit ? `<a href="/edit-profile.html?id=${encodeURIComponent(supplier.id)}" class="btn owner-edit-btn">✏️ עריכה (מנהל)</a>` : ''}
       </div>
-      ${isOwner ? '<p class="owner-note">הכפתור הזה מופיע רק לכם, לא ללקוחות.</p>' : ''}` : ''}
+      ${isOwner ? '<p class="owner-note">הכפתור הזה מופיע רק לכם, לא ללקוחות.</p>' : ''}
+      ${adminEdit ? '<p class="owner-note">הכפתור הזה מופיע רק למנהלים, לא ללקוחות.</p>' : ''}` : ''}
     </div>
   </div>
 </section>

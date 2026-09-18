@@ -57,7 +57,7 @@
 
 <section class="join-hero">
   <div class="wrap">
-    <h1>עריכת הפרופיל</h1>
+    <h1 id="edit-title">עריכת הפרופיל</h1>
     <p>עדכנו את התיאור, החבילות והמחירים, הקישורים והלוגו. השינויים מופיעים באתר מיד ואין צורך באישור מחדש.</p>
   </div>
 </section>
@@ -94,18 +94,37 @@
       </div>
     </div>
 
+    <div class="join-state" id="edit-not-admin" hidden>
+      <div class="icon">🔒</div>
+      <h2>הקישור הזה מיועד למנהלי האתר</h2>
+      <p class="join-state-text">רק מנהל יכול לערוך פרופיל של עסק אחר.</p>
+      <div class="join-state-actions">
+        <a href="vendors.html" class="btn btn-secondary">לכל הספקים</a>
+      </div>
+    </div>
+
+    <div class="join-state" id="edit-missing" hidden>
+      <div class="icon">🔍</div>
+      <h2>הפרופיל לא נמצא</h2>
+      <p class="join-state-text">ייתכן שהוא נמחק. ספקים לדוגמה שמגיעים עם האתר לא ניתנים לעריכה כאן.</p>
+      <div class="join-state-actions">
+        <a href="/admin-suppliers/profiles" class="btn btn-secondary">לכל הפרופילים</a>
+      </div>
+    </div>
+
     <div class="join-state" id="edit-done" hidden>
       <div class="icon">✅</div>
       <h2>השינויים נשמרו</h2>
       <p class="join-state-text">הפרופיל המעודכן כבר מופיע באתר.</p>
       <div class="join-state-actions">
         <a href="#" class="btn btn-primary" id="edit-view-link" target="_blank" rel="noopener">צפייה בפרופיל ↗</a>
-        <a href="dashboard.html" class="btn btn-secondary">ללוח הבקרה</a>
+        <a href="dashboard.html" class="btn btn-secondary" id="edit-back-link">ללוח הבקרה</a>
         <button type="button" class="btn btn-ghost" id="edit-again">המשך עריכה</button>
       </div>
     </div>
 
     <form id="edit-form" hidden>
+      <div class="admin-edit-banner" id="edit-admin-banner" hidden>🔐 מצב מנהל — אתם עורכים פרופיל של עסק אחר. השינויים יופיעו באתר מיד.</div>
       <h2>עריכת פרטי הפרופיל</h2>
       <p>שם העסק, הקטגוריה, התמונות והסרטון לא ניתנים לעריכה כאן כרגע.</p>
 

@@ -44,6 +44,7 @@ function createdRow(row) {
         ${row.createdBy ? `<div class="profile-meta">${row.fromSupplier ? 'נשלח על ידי הספק' : 'נוצר על ידי'} ${escapeHtml(row.createdBy)}</div>` : ''}
         <div class="profile-links">
           <a href="${escapeHtml(row.viewUrl)}" target="_blank" rel="noopener">צפייה ↗</a>
+          <a href="/edit-profile.html?id=${encodeURIComponent(row.key)}">✏️ עריכה</a>
           <button type="button" data-copy="${escapeHtml(row.viewUrl)}">העתקת קישור</button>
           <button type="button" class="delete-link" data-delete-profile="${escapeHtml(row.key)}" data-name="${escapeHtml(row.name)}">מחיקה</button>
         </div>

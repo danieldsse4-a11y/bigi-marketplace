@@ -345,34 +345,66 @@ app.put(
     next();
   },
   supplierForm.parseEditForm((req, res, message) => res.status(400).json({ error: message })),
-  async (req, res) => {
-    const form = supplierForm.readEditForm(req);
-    const checked = supplierForm.checkEdit(form);
-    if (checked.error) return res.status(400).json({ error: checked.error });
-
-    const own = () => Object.values(db.load().suppliers).find((s) => s.ownerUserId === req.user.id);
-    const target = own();
+  (req, res) => {
+    const target = Object.values(db.load().suppliers).find((s) => s.ownerUserId === req.user.id);
     if (!target) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
+    // Still theirs at the moment of saving — not just when the request started.
+    return saveProfileEdit(req, res, target.id, (s) => s.ownerUserId === req.user.id);
+  }
+);
 
-    const newLogo = form.logoFile ? await storage.saveImage(target.id, form.logoFile) : null;
-    let replacedLogo = null;
-    const saved = await db.withDb((data) => {
-      const s = data.suppliers[target.id];
-      if (!s || s.ownerUserId !== req.user.id) return false;
-      if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
-      s.description = checked.description;
-      s.contactEmail = checked.contactEmail;
-      s.packages = checked.packages;
-      s.socialLinks = checked.socialLinks;
-      s.links = '';
-      s.updatedAt = new Date().toISOString();
-      return true;
-    });
-    if (!saved) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+// The fields a supplier can change, applied to one profile. `stillAllowed` is
+// re-checked inside the write so nothing changes hands between check and save.
+// Shared by a supplier editing their own profile and an admin editing any.
+async function saveProfileEdit(req, res, id, stillAllowed) {
+  const form = supplierForm.readEditForm(req);
+  const checked = supplierForm.checkEdit(form);
+  if (checked.error) return res.status(400).json({ error: checked.error });
 
-    // Only once the new logo is safely stored does the old file go.
-    if (replacedLogo && replacedLogo !== newLogo) await storage.deleteImageByUrl(replacedLogo);
-    res.json({ profile: catalog.ownProfile(db.load(), req.user.id) });
+  const newLogo = form.logoFile ? await storage.saveImage(id, form.logoFile) : null;
+  let replacedLogo = null;
+  const saved = await db.withDb((data) => {
+    const s = data.suppliers[id];
+    if (!s || !stillAllowed(s)) return false;
+    if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
+    s.description = checked.description;
+    s.contactEmail = checked.contactEmail;
+    s.packages = checked.packages;
+    s.socialLinks = checked.socialLinks;
+    s.links = '';
+    s.updatedAt = new Date().toISOString();
+    return true;
+  });
+  if (!saved) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+
+  // Only once the new logo is safely stored does the old file go.
+  if (replacedLogo && replacedLogo !== newLogo) await storage.deleteImageByUrl(replacedLogo);
+  res.json({ profile: catalog.profileForAdmin(db.load(), id) });
+}
+
+// An admin can open and edit any profile in the database, whoever owns it —
+// the same fields, and the same rules, as the supplier's own edit page.
+app.get('/api/admin/profiles/:id', requireDb, auth.requireAdmin, (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const profile = catalog.profileForAdmin(db.load(), req.params.id);
+  if (!profile) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+  res.json({ profile });
+});
+
+app.put(
+  '/api/admin/profiles/:id',
+  requireSameOrigin,
+  requireDb,
+  auth.requireAdmin,
+  supplierEditLimiter,
+  (req, res, next) => {
+    if (!catalog.profileForAdmin(db.load(), req.params.id)) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+    next();
+  },
+  supplierForm.parseEditForm((req, res, message) => res.status(400).json({ error: message })),
+  async (req, res) => {
+    await saveProfileEdit(req, res, req.params.id, () => true);
+    if (res.statusCode === 200) console.log(`Admin ${req.adminEmail} edited the profile ${req.params.id}`);
   }
 );
 
@@ -592,6 +624,8 @@ app.get('/supplier/view/:uuid', requireDb, (req, res) => {
     viewer: user ? { id: user.id, role: user.role } : null,
     // Only the supplier who owns this profile is offered the edit link.
     isOwner: Boolean(user && supplier.ownerUserId && supplier.ownerUserId === user.id),
+    // An admin may edit any profile.
+    isAdmin: auth.isAdminUser(user),
   }));
 });
 

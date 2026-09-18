@@ -88,7 +88,7 @@ function page({ title, body, extraHead = '', wide = false }) {
   .profile-info{ flex:1; min-width:0; }
   .profile-name{ font-weight:800; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .profile-meta{ color:var(--muted); font-size:12.5px; margin-top:2px; }
-  .profile-links{ display:flex; gap:12px; margin-top:6px; font-size:13px; font-weight:700; }
+  .profile-links{ display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; font-size:13px; font-weight:700; }
   .profile-links a,.profile-links button{ color:var(--primary); padding:4px 0; font-weight:700; font-size:13px; }
   .profile-links .delete-link{ color:var(--accent); }
   .profile-links .delete-link:hover{ text-decoration:underline; }
