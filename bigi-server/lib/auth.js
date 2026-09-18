@@ -62,6 +62,12 @@ function isAdminUser(user) {
   return Boolean(user && user.adminVerifiedAt && isWhitelisted(user.email));
 }
 
+// An admin runs the site, so they may also list their own business without
+// opening a second account under a different email.
+function canActAsSupplier(user) {
+  return Boolean(user && (user.role === 'supplier' || isAdminUser(user)));
+}
+
 // What the browser is allowed to know about the signed-in account.
 function publicUser(user) {
   if (!user) return null;
@@ -269,6 +275,7 @@ module.exports = {
   deleteAccount,
   getWhitelist,
   isWhitelisted,
+  canActAsSupplier,
   normalizeEmail,
   publicUser,
   createUser,

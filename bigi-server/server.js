@@ -304,7 +304,7 @@ app.post(
   auth.requireUser,
   supplierSubmitLimiter,
   (req, res, next) => {
-    if (req.user.role !== 'supplier') return res.status(403).json({ error: 'רק חשבון ספק יכול לשלוח פרופיל.' });
+    if (!auth.canActAsSupplier(req.user)) return res.status(403).json({ error: 'רק חשבון ספק יכול לשלוח פרופיל.' });
     if (catalog.ownProfile(db.load(), req.user.id)) return res.status(409).json({ error: 'כבר שלחתם פרופיל.' });
     next();
   },
@@ -340,7 +340,7 @@ app.put(
   auth.requireUser,
   supplierEditLimiter,
   (req, res, next) => {
-    if (req.user.role !== 'supplier') return res.status(403).json({ error: 'רק חשבון ספק יכול לערוך פרופיל.' });
+    if (!auth.canActAsSupplier(req.user)) return res.status(403).json({ error: 'רק חשבון ספק יכול לערוך פרופיל.' });
     if (!catalog.ownProfile(db.load(), req.user.id)) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
     next();
   },

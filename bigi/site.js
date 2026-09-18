@@ -61,6 +61,12 @@
     return /^\/(?!\/)[\w\-./?=&%#]*$/.test(next) || /^[\w-]+\.html(\?[\w\-=&%.]*)?$/.test(next) ? next : '';
   }
 
+  // An admin may also list their own business, so they reach the supplier
+  // pages too. The server applies the same rule.
+  function isSupplierAccount(user){
+    return Boolean(user && (user.role === 'supplier' || user.isAdmin));
+  }
+
   /* ---------- Signed-in account (server session) ---------- */
   const Account = {
     user: null,
@@ -233,7 +239,7 @@
   function renderAccountUI(user){
     $$('[data-auth-guest]').forEach(el => el.hidden = !!user);
     $$('[data-auth-user]').forEach(el => el.hidden = !user);
-    $$('[data-role-supplier]').forEach(el => el.hidden = !(user && user.role === 'supplier'));
+    $$('[data-role-supplier]').forEach(el => el.hidden = !isSupplierAccount(user));
     $$('[data-admin-only]').forEach(el => el.hidden = !(user && user.isAdmin));
     $$('[data-admin-confirm]').forEach(el => el.hidden = !(user && user.adminPending));
     if(!user) return;
@@ -928,7 +934,7 @@
 
     Account.ready().then(async (user) => {
       if(!user) return show('join-guest');
-      if(user.role !== 'supplier') return show('join-customer');
+      if(!isSupplierAccount(user)) return show('join-customer');
       const { ok, data } = await api('/api/supplier/profile');
       if(ok && data.profile) return showDone(data.profile);
       show('form');
@@ -1004,7 +1010,7 @@
 
     Account.ready().then(async (user) => {
       if(!user) return show('edit-guest');
-      if(user.role !== 'supplier') return show('edit-customer');
+      if(!isSupplierAccount(user)) return show('edit-customer');
       const { ok, data } = await api('/api/supplier/profile');
       if(!ok) return show('edit-guest');
       if(!data.profile) return show('edit-no-profile');
@@ -1067,7 +1073,7 @@
 
     Account.ready().then(async (user) => {
       if(!user) return show('dash-guest');
-      if(user.role !== 'supplier') return show('dash-customer');
+      if(!isSupplierAccount(user)) return show('dash-customer');
       $('#dash-title').textContent = `שלום, ${user.name}`;
       const { ok, data } = await api('/api/supplier/profile');
       if(!ok) return show('dash-guest');

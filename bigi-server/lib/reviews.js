@@ -38,6 +38,10 @@ function saveReview(db, { supplierId, user, rating, text }) {
   if (!user || user.role !== 'customer') return { error: 'רק חשבון לקוח יכול לכתוב ביקורת.', code: 'forbidden' };
   const supplier = db.suppliers[supplierId];
   if (!supplier || !supplier.isPublic) return { error: 'אפשר לכתוב ביקורת רק על פרופיל שפורסם באתר.', code: 'missing' };
+  // An admin can own a profile while their account role is still customer.
+  if (supplier.ownerUserId && supplier.ownerUserId === user.id) {
+    return { error: 'אי אפשר לכתוב ביקורת על הפרופיל שלכם.', code: 'forbidden' };
+  }
 
   const stars = Number(rating);
   if (!Number.isInteger(stars) || stars < 1 || stars > 5) return { error: 'יש לבחור דירוג בין 1 ל־5 כוכבים.', code: 'invalid' };
