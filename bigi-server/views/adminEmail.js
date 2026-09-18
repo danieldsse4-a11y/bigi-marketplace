@@ -24,6 +24,15 @@ function verdict(status) {
       text: 'עם onboarding@resend.dev, Resend שולח מיילים אך ורק לכתובת שאיתה נפתח חשבון Resend. לכל כתובת אחרת הוא פשוט דוחה את השליחה — ולכן "לא מגיע מייל". כדי לשלוח לכל אחד צריך לאמת דומיין ב-Resend ואז להגדיר את EMAIL_FROM לכתובת בדומיין הזה.',
     };
   }
+  // gmail/outlook and friends can never be verified — nobody owns them.
+  const FREE_MAIL = ['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'walla.com', 'walla.co.il'];
+  if (FREE_MAIL.includes(status.fromDomain)) {
+    return {
+      level: 'error',
+      title: `אי אפשר לשלוח מכתובת ${status.fromDomain}`,
+      text: `Resend מאשר שליחה רק מדומיין שאתם הבעלים שלו ואימתתם בחשבון, ו-${status.fromDomain} לא יכול להיות מאומת. כל המיילים מהאתר נדחים כרגע. שנו את EMAIL_FROM ב-Render ל: ביגי ספקים <onboarding@resend.dev> — שם השולח נשאר שלכם. לשליחה לכל לקוח צריך דומיין משלכם, מאומת ב-Resend.`,
+    };
+  }
   const domain = (status.domains || []).find((d) => d.name.toLowerCase() === status.fromDomain);
   if (!domain) {
     return {

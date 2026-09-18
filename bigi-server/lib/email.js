@@ -6,7 +6,21 @@
 // can still be exercised locally before Resend is configured.
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Bigi Admin <onboarding@resend.dev>';
+const TEST_SENDER = 'onboarding@resend.dev';
+const EMAIL_FROM = process.env.EMAIL_FROM || `Bigi Admin <${TEST_SENDER}>`;
+
+const displayName = (from) => (from.match(/^\s*([^<]+?)\s*</) || [null, ''])[1];
+
+function post(from, recipients, subject, html) {
+  return fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: recipients, subject, html }),
+  });
+}
 
 async function sendEmail({ to, subject, html }) {
   const recipients = Array.isArray(to) ? to : [to];
@@ -20,21 +34,25 @@ async function sendEmail({ to, subject, html }) {
     return { ok: true, dev: true };
   }
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from: EMAIL_FROM, to: recipients, subject, html }),
-  });
+  const res = await post(EMAIL_FROM, recipients, subject, html);
+  if (res.ok) return { ok: true };
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Resend send failed (${res.status}): ${body}`);
+  const body = await res.text().catch(() => '');
+
+  // A sender on a domain Resend can't verify (someone puts their gmail address
+  // in EMAIL_FROM) otherwise kills every email the site sends. Rather than lose
+  // the message, send it from Resend's own address, keeping the display name.
+  // It is logged loudly, and the admin "מיילים" page reports the real setting.
+  const senderRejected = res.status === 403 && /not verified/i.test(body);
+  if (senderRejected && !EMAIL_FROM.includes(TEST_SENDER)) {
+    const from = `${displayName(EMAIL_FROM) || 'ביגי ספקים'} <${TEST_SENDER}>`;
+    console.warn(`⚠️  EMAIL_FROM (${EMAIL_FROM}) was refused by Resend: ${body}\n    Sending from ${from} instead — set EMAIL_FROM to an address on a domain verified in Resend.`);
+    const retry = await post(from, recipients, subject, html);
+    if (retry.ok) return { ok: true, fellBack: true };
+    throw new Error(`Resend send failed (${retry.status}): ${await retry.text().catch(() => '')}`);
   }
 
-  return { ok: true };
+  throw new Error(`Resend send failed (${res.status}): ${body}`);
 }
 
 // What the admin area shows about email delivery. The API key itself is never
