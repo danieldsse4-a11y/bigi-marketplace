@@ -42,10 +42,6 @@ function reviewsPanel(supplier, list, viewer) {
   } else if (!viewer) {
     const next = encodeURIComponent(`/supplier/view/${supplier.id}#reviews`);
     write = `<p class="review-note">כדי לכתוב ביקורת צריך להתחבר. <a href="/login.html?next=${next}" style="color:var(--primary); font-weight:700;">התחברות או הרשמה</a></p>`;
-  } else if (supplier.ownerUserId && supplier.ownerUserId === viewer.id) {
-    // The owner's account may be a customer one, but the server refuses a
-    // review of your own profile, so no form that can only fail.
-    write = '<p class="review-note">זה הפרופיל שלכם — את הביקורות כותבים הלקוחות.</p>';
   } else if (viewer.role !== 'customer') {
     write = '<p class="review-note">רק חשבונות לקוח יכולים לכתוב ביקורות.</p>';
   } else {

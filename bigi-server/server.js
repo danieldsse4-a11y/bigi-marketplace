@@ -340,11 +340,9 @@ app.put(
   auth.requireUser,
   supplierEditLimiter,
   (req, res, next) => {
-    // Owning the profile is enough: an admin may have attached it to an account
-    // that was opened as a customer.
-    if (catalog.ownProfile(db.load(), req.user.id)) return next();
     if (!auth.canActAsSupplier(req.user)) return res.status(403).json({ error: 'רק חשבון ספק יכול לערוך פרופיל.' });
-    return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
+    if (!catalog.ownProfile(db.load(), req.user.id)) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
+    next();
   },
   supplierForm.parseEditForm((req, res, message) => res.status(400).json({ error: message })),
   async (req, res) => {
@@ -524,28 +522,6 @@ app.post(
   }
 );
 
-// Attaches a profile to an existing account, so that account can edit it, or
-// detaches it with an empty address. Nothing else about the profile changes.
-app.post(
-  '/admin-suppliers/profiles/:key/owner',
-  express.json({ limit: '1kb' }),
-  requireSameOrigin,
-  requireDb,
-  auth.requireAdmin,
-  visibilityLimiter,
-  async (req, res) => {
-    const email = req.body?.email;
-    if (email !== undefined && typeof email !== 'string') return res.status(400).json({ error: 'ערך לא תקין' });
-
-    const result = await db.withDb((data) => catalog.setOwner(data, req.params.key, email, req.adminEmail));
-    if (result.error) return res.status(400).json({ error: result.error });
-
-    const who = result.detached ? 'detached' : `${result.owner.name} <${result.owner.email}>`;
-    console.log(`Admin ${req.adminEmail} set the owner of profile ${req.params.key} to ${who}`);
-    res.json({ key: req.params.key, owner: result.owner || null });
-  }
-);
-
 // Deleting is permanent: the profile leaves the database and its uploaded
 // uploaded media are removed. Sample suppliers ship with the site, so they can only be
 // switched to demo — never deleted.
@@ -581,36 +557,16 @@ app.post(
     const error = supplierForm.validateForm(form);
     if (error) return rerender(error);
 
-    // Checked before anything is uploaded, so a typo in the address doesn't
-    // cost a round of photo uploads.
-    const owner = catalog.lookupOwner(db.load(), form.ownerEmail, null);
-    if (owner.error) return rerender(owner.error);
-
     let supplier;
     try {
-      supplier = await supplierForm.buildSupplier(form, {
-        createdBy: req.adminEmail,
-        source: 'admin',
-        ownerUserId: owner.ownerUserId,
-      });
+      supplier = await supplierForm.buildSupplier(form, { createdBy: req.adminEmail, source: 'admin' });
     } catch (err) {
       console.error('Media upload failed:', err);
       return rerender('העלאת התמונות או הסרטון נכשלה. נסו שוב.');
     }
-    const claimed = await db.withDb((data) => {
-      // Re-checked here: the account could have sent its own profile while the
-      // photos were uploading.
-      const still = catalog.lookupOwner(data, form.ownerEmail, null);
-      if (still.error) return still.error;
-      supplier.ownerUserId = still.ownerUserId;
+    await db.withDb((data) => {
       data.suppliers[supplier.id] = supplier;
-      return null;
     });
-    if (claimed) {
-      // Nothing was saved, so the photos just uploaded have nothing to belong to.
-      await storage.deleteSupplierImages(supplier.id).catch(() => {});
-      return rerender(claimed);
-    }
 
     await notifyAdminsOfNewProfile(supplier, 'פרופיל ספק חדש נוצר באזור הניהול:');
     res.send(successPage({ name: supplier.name, link: `${BASE_URL}/supplier/view/${supplier.id}` }));

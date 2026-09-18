@@ -62,10 +62,9 @@
   }
 
   // An admin may also list their own business, so they reach the supplier
-  // pages too — and so does any account an admin attached a profile to, even
-  // one opened as a customer. The server applies the same rule.
+  // pages too. The server applies the same rule.
   function isSupplierAccount(user){
-    return Boolean(user && (user.role === 'supplier' || user.isAdmin || user.hasProfile));
+    return Boolean(user && (user.role === 'supplier' || user.isAdmin));
   }
 
   /* ---------- Signed-in account (server session) ---------- */
