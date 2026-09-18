@@ -40,6 +40,10 @@ const VENDORS = [
   { id: 16, name: "אולמי הגפן הזהובה",   cat: "venues",    city: "רמת גן",    rating: 4.5, reviews: 167, priceFrom: 22000, badge: null,         tag: "אולם אירועים",        grad: "g8", emoji: "🏰", phone: "972501234516" },
   { id: 17, name: "ליצן קפיץ",           cat: "magic",     city: "אשדוד",     rating: 4.8, reviews: 54,  priceFrom: 700,  badge: "חדש",         tag: "ליצן ואמן בלונים",    grad: "g1", emoji: "🤡", phone: "972501234517" },
   { id: 18, name: "בוטיק שולחנות שביל הזהב", cat: "flowers", city: "תל אביב", rating: 4.9, reviews: 76,  priceFrom: 1600, badge: "מומלץ",      tag: "עיצוב שולחנות אירוע", grad: "g2", emoji: "🌸", phone: "972501234518" },
+  { id: 19, name: "קפיצה גבוה מתנפחים",  cat: "attractions", city: "ראשון לציון", rating: 4.7, reviews: 68, priceFrom: 1400, badge: null,     tag: "מתנפחים ומתקני שעשועים", grad: "g3", emoji: "🎪", phone: "972501234519" },
+  { id: 20, name: "אקסטרים מתחמי פעילות", cat: "attractions", city: "פתח תקווה", rating: 4.8, reviews: 91, priceFrom: 3200, badge: "זמין השבוע", tag: "מתחם אטרקציות לאירוע", grad: "g6", emoji: "🎡", phone: "972501234520" },
+  { id: 21, name: "הספר של החתן",        cat: "barbers",   city: "תל אביב",   rating: 4.9, reviews: 124, priceFrom: 450,  badge: "מומלץ",       tag: "תספורת ועיצוב זקן לחתן", grad: "g7", emoji: "💈", phone: "972501234521" },
+  { id: 22, name: "מספרת רויאל אירועים", cat: "barbers",   city: "חיפה",      rating: 4.6, reviews: 57,  priceFrom: 380,  badge: "חדש",         tag: "ספר עד לאירוע",       grad: "g4", emoji: "✂️", phone: "972501234522" },
 ];
 
 const PACKAGES = {
