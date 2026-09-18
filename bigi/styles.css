@@ -309,10 +309,14 @@ h3{ font-size:20px; }
 /* ==========================================================================
    CATEGORIES GRID
    ========================================================================== */
+/* Flex rather than grid so a row that isn't full — 13 categories in rows of
+   six — centres its leftovers instead of leaving one card stranded. */
 .cat-grid{
-  display:grid; grid-template-columns:repeat(6,1fr); gap:16px;
+  --cat-cols:6; --cat-gap:16px;
+  display:flex; flex-wrap:wrap; justify-content:center; gap:var(--cat-gap);
 }
 .cat-card{
+  flex:0 1 calc((100% - (var(--cat-cols) - 1) * var(--cat-gap)) / var(--cat-cols));
   background:var(--white); border:1px solid var(--line); border-radius:var(--radius-lg);
   padding:24px 16px; text-align:center; cursor:pointer;
   transition:transform .4s var(--ease-spring), box-shadow .4s var(--ease-out), border-color .3s;
@@ -875,7 +879,7 @@ body:has(.floating-actions) .checklist-bar{ bottom:96px; }
    RESPONSIVE
    ========================================================================== */
 @media (max-width:1080px){
-  .cat-grid{ grid-template-columns:repeat(4,1fr); }
+  .cat-grid{ --cat-cols:4; }
   .deals-grid{ grid-template-columns:repeat(2,1fr); }
   .vendors-grid{ grid-template-columns:repeat(2,1fr); }
   .stats-grid{ grid-template-columns:repeat(2,1fr); row-gap:32px; }
@@ -892,7 +896,7 @@ body:has(.floating-actions) .checklist-bar{ bottom:96px; }
   .header-actions .nav-text-link,
   .header-actions .header-extra,
   .search-card{ grid-template-columns:1fr; }
-  .cat-grid{ grid-template-columns:repeat(3,1fr); }
+  .cat-grid{ --cat-cols:3; }
   .deals-grid{ grid-template-columns:1fr; }
   .vendors-grid{ grid-template-columns:1fr; }
   .hero-stats-strip{ gap:26px; }
@@ -1007,7 +1011,7 @@ body:has(.floating-actions) .checklist-bar{ bottom:96px; }
   .account-btn{ max-width:96px; }
 }
 @media (max-width:360px){
-  .cat-grid{ grid-template-columns:repeat(2,1fr); }
+  .cat-grid{ --cat-cols:2; }
   .hero-title{ font-size:27px; }
 }
 
