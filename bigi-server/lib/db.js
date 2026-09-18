@@ -9,7 +9,7 @@
 const storage = require('./storage');
 
 function empty() {
-  return { users: {}, suppliers: {}, magicTokens: {}, sessions: {}, sampleVisibility: {} };
+  return { users: {}, suppliers: {}, magicTokens: {}, sessions: {}, sampleVisibility: {}, reviews: {} };
 }
 
 let cache = empty();

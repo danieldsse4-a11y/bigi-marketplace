@@ -13,6 +13,7 @@
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { load, withDb } = require('./db');
+const reviews = require('./reviews');
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -255,6 +256,7 @@ async function deleteAccount(userId, { actingUserId }) {
     for (const [token, entry] of Object.entries(db.magicTokens)) {
       if (entry.userId === userId) delete db.magicTokens[token];
     }
+    reviews.removeForUser(db, userId);
     delete db.users[userId];
     return { deleted: { name: user.name, email: user.email } };
   });

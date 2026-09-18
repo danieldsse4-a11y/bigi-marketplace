@@ -58,7 +58,7 @@
   // Only same-site paths are allowed as a redirect target after login.
   function safeNext(raw){
     const next = String(raw || '');
-    return /^\/(?!\/)[\w\-./?=&%]*$/.test(next) || /^[\w-]+\.html(\?[\w\-=&%.]*)?$/.test(next) ? next : '';
+    return /^\/(?!\/)[\w\-./?=&%#]*$/.test(next) || /^[\w-]+\.html(\?[\w\-=&%.]*)?$/.test(next) ? next : '';
   }
 
   /* ---------- Signed-in account (server session) ---------- */

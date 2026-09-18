@@ -2,6 +2,7 @@ const { escapeHtml } = require('./layout');
 const { categoryById } = require('../lib/siteData');
 const { normalizePhone } = require('../lib/catalog');
 const { socialLinksOf } = require('../lib/supplierProfile');
+const { summarize } = require('../lib/reviews');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
 // needs the real site header (same markup as bigi/vendor.html) plus a
@@ -15,7 +16,54 @@ function waLink(phone, name) {
   return `https://wa.me/${intl}?text=${msg}`;
 }
 
-function supplierViewPage(supplier, { baseUrl }) {
+const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
+const starsText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+// What the reviews tab offers depends on who is looking: a customer gets the
+// form, anyone else gets told why not. Everything typed by a person is escaped.
+function reviewsPanel(supplier, list, viewer) {
+  const summary = summarize(list);
+  const own = viewer ? list.find((r) => r.userId === viewer.id) : null;
+
+  let write;
+  if (!supplier.isPublic) {
+    write = '<p class="review-note">אפשר לכתוב ביקורת רק אחרי שהפרופיל מפורסם באתר.</p>';
+  } else if (!viewer) {
+    const next = encodeURIComponent(`/supplier/view/${supplier.id}#reviews`);
+    write = `<p class="review-note">כדי לכתוב ביקורת צריך להתחבר. <a href="/login.html?next=${next}" style="color:var(--primary); font-weight:700;">התחברות או הרשמה</a></p>`;
+  } else if (viewer.role !== 'customer') {
+    write = '<p class="review-note">רק חשבונות לקוח יכולים לכתוב ביקורות.</p>';
+  } else {
+    write = `
+      <form class="review-form" data-supplier="${escapeHtml(supplier.id)}" novalidate>
+        <div class="review-form-title">${own ? 'הביקורת שלכם' : 'כתבו ביקורת'}</div>
+        <div class="star-input" role="radiogroup" aria-label="דירוג">
+          ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star${own && own.rating >= n ? ' on' : ''}" role="radio" data-v="${n}" aria-checked="${own && own.rating === n ? 'true' : 'false'}" aria-label="${n} כוכבים">★</button>`).join('')}
+        </div>
+        <textarea maxlength="1000" rows="3" placeholder="ספרו על החוויה שלכם (לא חובה)">${own ? escapeHtml(own.text) : ''}</textarea>
+        <div class="review-form-error" role="alert" hidden></div>
+        <div class="review-form-actions">
+          <button type="submit" class="btn btn-primary btn-sm">${own ? 'עדכון הביקורת' : 'פרסום הביקורת'}</button>
+          ${own ? '<button type="button" class="btn btn-ghost btn-sm" data-delete-review>מחיקת הביקורת שלי</button>' : ''}
+        </div>
+      </form>`;
+  }
+
+  return `
+      <h3>ביקורות${summary.count ? ` <span class="review-avg"><span class="review-star-on">★</span> ${summary.average} · ${summary.count} ${summary.count === 1 ? 'ביקורת' : 'ביקורות'}</span>` : ''}</h3>
+      ${write}
+      ${list.length ? `<ul class="review-list">${list.map((r) => `
+        <li class="review-item${own && r.id === own.id ? ' is-mine' : ''}">
+          <div class="review-head">
+            <strong>${escapeHtml(r.name)}</strong>
+            <span class="review-stars" role="img" aria-label="${r.rating} מתוך 5 כוכבים">${starsText(r.rating)}</span>
+            <time datetime="${escapeHtml(r.createdAt)}">${dateFmt.format(new Date(r.createdAt))}</time>
+          </div>
+          ${r.text ? `<p>${escapeHtml(r.text)}</p>` : ''}
+        </li>`).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
+}
+
+function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   const {
     name, category, city, description, phone, contactEmail,
     backgroundImage, productImages, video,
@@ -121,6 +169,30 @@ function supplierViewPage(supplier, { baseUrl }) {
     width:72px; height:72px; flex-shrink:0; object-fit:contain; background:#fff;
     border-radius:18px; padding:6px; box-shadow:0 8px 24px rgba(10,8,24,0.35);
   }
+  .review-avg{ font-size:13.5px; font-weight:700; color:var(--ink-soft); margin-inline-start:8px; }
+  .review-star-on, .star.on, .review-stars{ color:#F5A623; }
+  .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
+  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-bottom:20px; display:grid; gap:12px; }
+  .review-form-title{ font-weight:800; font-size:14.5px; }
+  .star-input{ display:flex; gap:2px; }
+  .star{ width:44px; height:44px; font-size:28px; line-height:1; color:#D0CDE0; background:transparent; border-radius:10px; transition:transform .15s; }
+  .star.on{ color:#F5A623; }
+  .star:hover{ transform:scale(1.12); }
+  .star:focus-visible{ outline:3px solid var(--primary-light); outline-offset:1px; }
+  .review-form textarea{
+    width:100%; resize:vertical; min-height:84px; font:inherit; font-size:15px; color:var(--ink);
+    padding:12px 14px; background:#fff; border:1.5px solid var(--line); border-radius:var(--radius-md); outline:none;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .review-form textarea:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
+  .review-form-error{ background:var(--accent-soft); color:#B8323C; border-radius:var(--radius-md); padding:10px 14px; font-size:13.5px; font-weight:600; }
+  .review-form-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .review-list{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
+  .review-item{ border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 16px; }
+  .review-item.is-mine{ border-color:var(--primary-light); background:var(--primary-soft); }
+  .review-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .review-head time{ margin-inline-start:auto; font-size:12.5px; color:var(--muted); }
+  .review-item p{ margin:8px 0 0; font-size:14.5px; line-height:1.65; color:var(--ink-soft); white-space:pre-wrap; overflow-wrap:anywhere; }
   .social-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .social-btn{
     display:inline-flex; align-items:center; min-height:40px; padding:9px 16px; max-width:100%;
@@ -222,8 +294,7 @@ function supplierViewPage(supplier, { baseUrl }) {
     </div>
 
     <div class="supplier-section tab-panel" id="panel-reviews" role="tabpanel" aria-labelledby="tab-reviews">
-      <h3>ביקורות</h3>
-      <p class="tab-empty">עדיין אין ביקורות.</p>
+      ${reviewsPanel(supplier, reviews, viewer)}
     </div>
 
     <div class="supplier-section">
@@ -296,6 +367,67 @@ function supplierViewPage(supplier, { baseUrl }) {
   }
   fromHash();
   window.addEventListener('hashchange', fromHash);
+})();
+</script>
+<script>
+(function(){
+  var form = document.querySelector('.review-form');
+  if(!form) return;
+  var stars = Array.prototype.slice.call(form.querySelectorAll('.star'));
+  var errorBox = form.querySelector('.review-form-error');
+  var textarea = form.querySelector('textarea');
+  var rating = 0;
+  stars.forEach(function(star){ if(star.classList.contains('on')) rating = Math.max(rating, Number(star.getAttribute('data-v'))); });
+
+  function paint(){
+    stars.forEach(function(star){
+      var v = Number(star.getAttribute('data-v'));
+      star.classList.toggle('on', v <= rating);
+      star.setAttribute('aria-checked', v === rating ? 'true' : 'false');
+    });
+  }
+  stars.forEach(function(star){
+    star.addEventListener('click', function(){ rating = Number(star.getAttribute('data-v')); paint(); });
+  });
+
+  function request(method, body){
+    var options = { method: method, credentials: 'same-origin', headers: {} };
+    if(body){ options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
+    return fetch('/api/suppliers/' + encodeURIComponent(form.getAttribute('data-supplier')) + '/reviews/mine', options)
+      .then(function(res){ return res.json().catch(function(){ return {}; }).then(function(data){ return { ok: res.ok, status: res.status, data: data }; }); });
+  }
+  function fail(message){
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+  }
+  function done(){
+    if(location.hash !== '#reviews') location.hash = '#reviews';
+    location.reload();
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    errorBox.hidden = true;
+    if(!rating){ fail('יש לבחור דירוג בכוכבים.'); return; }
+    var button = form.querySelector('button[type=submit]');
+    button.disabled = true;
+    request('PUT', { rating: rating, text: textarea.value })
+      .then(function(r){
+        if(r.ok) return done();
+        button.disabled = false;
+        fail(r.status === 401 ? 'החיבור פג — התחברו מחדש ונסו שוב.' : (r.data.error || 'השמירה נכשלה. נסו שוב.'));
+      })
+      .catch(function(){ button.disabled = false; fail('אין חיבור לשרת. נסו שוב.'); });
+  });
+
+  var del = form.querySelector('[data-delete-review]');
+  if(del) del.addEventListener('click', function(){
+    if(!window.confirm('למחוק את הביקורת שלכם?')) return;
+    del.disabled = true;
+    request('DELETE')
+      .then(function(r){ if(r.ok) return done(); del.disabled = false; fail(r.data.error || 'המחיקה נכשלה. נסו שוב.'); })
+      .catch(function(){ del.disabled = false; fail('אין חיבור לשרת. נסו שוב.'); });
+  });
 })();
 </script>
 

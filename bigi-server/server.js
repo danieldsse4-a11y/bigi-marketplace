@@ -21,6 +21,8 @@ const { accountsPage } = require('./views/adminAccounts');
 const { emailPage } = require('./views/adminEmail');
 const { featuredPage } = require('./views/adminFeatured');
 const { supplierViewPage } = require('./views/supplierView');
+const { reviewsPage } = require('./views/adminReviews');
+const reviews = require('./lib/reviews');
 
 const PORT = process.env.PORT || 3000;
 // RENDER_EXTERNAL_URL is set automatically by Render — this means a fresh
@@ -95,6 +97,7 @@ const signupLimiter = limiter(60, 10, 'יותר מדי הרשמות מהמכשי
 const adminVerifyLimiter = limiter(60, 5, 'יותר מדי בקשות לקישור אישור. נסו שוב מאוחר יותר.');
 const supplierSubmitLimiter = limiter(60, 10, 'יותר מדי ניסיונות שליחה. נסו שוב מאוחר יותר.');
 const supplierEditLimiter = limiter(60, 40, 'יותר מדי שמירות. נסו שוב מאוחר יותר.');
+const reviewLimiter = limiter(60, 30, 'יותר מדי ביקורות. נסו שוב מאוחר יותר.');
 const createLimiter = limiter(60, 20, 'יותר מדי בקשות ליצירת פרופיל. נסו שוב מאוחר יותר.');
 const visibilityLimiter = limiter(15, 150, 'יותר מדי שינויים. נסו שוב בעוד כמה דקות.');
 const deleteLimiter = limiter(15, 30, 'יותר מדי מחיקות. נסו שוב בעוד כמה דקות.');
@@ -391,8 +394,28 @@ app.get('/admin-suppliers', requireDb, auth.requireAdmin, (req, res) => {
   res.send(createFormPage({ adminEmail: req.adminEmail }));
 });
 
+app.get('/admin-suppliers/reviews', requireDb, auth.requireAdmin, (req, res) => {
+  res.send(reviewsPage({ adminEmail: req.adminEmail, rows: reviews.adminRows(db.load()) }));
+});
+
+// Admins can remove any review; the supplier it is about cannot.
+app.post(
+  '/admin-suppliers/reviews/:id/delete',
+  express.json({ limit: '1kb' }),
+  requireSameOrigin,
+  requireDb,
+  auth.requireAdmin,
+  deleteLimiter,
+  async (req, res) => {
+    const removed = await db.withDb((data) => reviews.deleteReview(data, req.params.id));
+    if (!removed) return res.status(404).json({ error: 'הביקורת לא נמצאה' });
+    res.json({ id: req.params.id });
+  }
+);
+
 app.get('/admin-suppliers/profiles', requireDb, auth.requireAdmin, (req, res) => {
-  res.send(profilesPage({ adminEmail: req.adminEmail, ...catalog.adminRows(db.load()) }));
+  const data = db.load();
+  res.send(profilesPage({ adminEmail: req.adminEmail, reviewCount: Object.keys(data.reviews || {}).length, ...catalog.adminRows(data) }));
 });
 
 app.get('/admin-suppliers/featured', requireDb, auth.requireAdmin, (req, res) => {
@@ -555,11 +578,52 @@ app.post(
    unguessable private link; live ones are also listed on the public site.
    ========================================================================== */
 app.get('/supplier/view/:uuid', requireDb, (req, res) => {
-  const supplier = db.load().suppliers[req.params.uuid];
+  const data = db.load();
+  const supplier = data.suppliers[req.params.uuid];
   if (!supplier) return res.status(404).send('לא נמצא.');
   if (!supplier.isPublic) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-  res.send(supplierViewPage(supplier, { baseUrl: BASE_URL }));
+  // The reviews tab differs per viewer (write form, login prompt, "your review"),
+  // so no shared cache may keep a copy.
+  res.setHeader('Cache-Control', 'private, no-store');
+  const user = auth.currentUser(req);
+  res.send(supplierViewPage(supplier, {
+    baseUrl: BASE_URL,
+    reviews: reviews.reviewsFor(data, supplier.id),
+    viewer: user ? { id: user.id, role: user.role } : null,
+  }));
 });
+
+// One review per customer per profile: this creates it or updates it.
+app.put(
+  '/api/suppliers/:id/reviews/mine',
+  requireSameOrigin,
+  requireDb,
+  auth.requireUser,
+  reviewLimiter,
+  async (req, res) => {
+    const result = await db.withDb((data) => reviews.saveReview(data, {
+      supplierId: req.params.id, user: data.users[req.user.id], rating: req.body?.rating, text: req.body?.text,
+    }));
+    if (result.error) {
+      const status = result.code === 'forbidden' ? 403 : result.code === 'missing' ? 404 : 400;
+      return res.status(status).json({ error: result.error });
+    }
+    res.json({ created: result.created });
+  }
+);
+
+app.delete(
+  '/api/suppliers/:id/reviews/mine',
+  requireSameOrigin,
+  requireDb,
+  auth.requireUser,
+  reviewLimiter,
+  async (req, res) => {
+    const removed = await db.withDb((data) => reviews.deleteOwn(data, req.params.id, req.user.id));
+    if (!removed) return res.status(404).json({ error: 'לא נמצאה ביקורת שלכם.' });
+    res.json({ deleted: true });
+  }
+);
 
 /* ==========================================================================
    The public site's data file — live suppliers only (admins also get demo

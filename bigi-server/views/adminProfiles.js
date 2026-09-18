@@ -70,7 +70,7 @@ function sampleRow(row) {
     </div>`;
 }
 
-function profilesPage({ adminEmail, fromSuppliers, created, samples }) {
+function profilesPage({ adminEmail, fromSuppliers, created, samples, reviewCount = 0 }) {
   const all = [...fromSuppliers, ...created, ...samples];
   const liveCount = all.filter((r) => r.published).length;
 
@@ -82,6 +82,8 @@ function profilesPage({ adminEmail, fromSuppliers, created, samples }) {
         <form method="POST" action="/admin-suppliers/logout" style="max-width:100%;"><button type="submit" class="btn btn-ghost btn-sm admin-logout-btn">התנתקות (${escapeHtml(adminEmail)})</button></form>
       </div>
       <p class="lead">הזיזו את המתג כדי לפרסם פרופיל באתר (<strong>פעיל באתר</strong>) או להחזיר אותו ל<strong>דמו</strong> — פרופיל דמו לא מופיע באתר הציבורי, והקישור הפרטי שלו ממשיך לעבוד.</p>
+
+      <p class="lead" style="margin-top:-12px;"><a href="/admin-suppliers/reviews" style="color:var(--primary); font-weight:700;">💬 ניהול ביקורות (${reviewCount})</a> — הסרת ביקורות לא הולמות מפרופילים.</p>
 
       <div class="profiles-filters" role="group" aria-label="סינון">
         <button type="button" class="active" data-filter="all">הכל (<span data-count="all">${all.length}</span>)</button>

@@ -136,6 +136,8 @@ function page({ title, body, extraHead = '', wide = false }) {
   .visibility-switch[aria-busy="true"]{ opacity:.6; pointer-events:none; }
   .visibility-switch:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; border-radius:12px; }
 
+  .review-stars-admin{ color:#F5A623; letter-spacing:1px; margin-inline-end:6px; }
+  .review-admin-text{ margin:8px 0 0; font-size:14px; line-height:1.6; color:var(--ink-soft); white-space:pre-wrap; overflow-wrap:anywhere; }
   .badge-pick{ display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .badge-pick-label{ font-size:12px; font-weight:800; color:var(--muted); }
   .badge-select{

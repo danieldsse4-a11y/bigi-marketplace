@@ -4,6 +4,7 @@
 
 const { CONST_NAMES, SITE_DATA, SAMPLE_VENDORS, categoryById } = require('./siteData');
 const { socialLinksOf } = require('./supplierProfile');
+const reviews = require('./reviews');
 
 const SAMPLE_KEY_PREFIX = 'sample-';
 
@@ -156,6 +157,7 @@ function deleteProfile(db, key) {
   if (!supplier) return null;
   delete db.suppliers[key];
   if (Array.isArray(db.featured)) db.featured = db.featured.filter((k) => k !== key);
+  reviews.removeForSupplier(db, key);
   return supplier;
 }
 
