@@ -66,6 +66,10 @@ function page({ title, body, extraHead = '', wide = false }) {
   .link-box{ display:flex; gap:8px; align-items:center; background:var(--bg-soft); border:1px dashed var(--line); border-radius:var(--radius-md); padding:12px 14px; font-size:13px; word-break:break-all; }
   .admin-card-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
   .admin-wrap.wide{ max-width:880px; }
+  /* The only way back to the site from inside the admin area */
+  .admin-home{ display:inline-flex; width:max-content; font-size:21px; margin-bottom:16px; padding:4px 2px; transition:opacity .2s; }
+  .admin-home:hover{ opacity:.72; }
+  .admin-home:focus-visible{ outline:3px solid var(--primary-light); outline-offset:4px; border-radius:8px; }
   .admin-tabs{ display:flex; gap:6px; background:#fff; border-radius:var(--radius-pill); padding:5px; box-shadow:var(--shadow-sm); margin-bottom:18px; }
   .admin-tabs a{ flex:1; text-align:center; padding:11px 14px; border-radius:var(--radius-pill); font-weight:700; font-size:14px; color:var(--muted); }
   .admin-tabs a.active{ background:var(--primary-soft); color:var(--primary); }
@@ -153,6 +157,7 @@ function page({ title, body, extraHead = '', wide = false }) {
   .photo-caption-input{ margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:13.5px; }
   @media (max-width:760px){
     .admin-wrap{ padding:20px 16px 60px; }
+    .admin-home{ font-size:19px; margin-bottom:12px; }
     .admin-card{ padding:24px 18px; border-radius:var(--radius-lg); }
     .admin-logout-btn{ white-space:normal; text-align:center; max-width:100%; }
     .photo-caption-input{ font-size:16px; }
@@ -175,6 +180,7 @@ ${extraHead}
 </head>
 <body>
 <div class="admin-wrap${wide ? ' wide' : ''}">
+<a href="/" class="logo admin-home" aria-label="חזרה לאתר הראשי">ביגי ספקים<span class="dot">.</span></a>
 ${body}
 </div>
 </body>
