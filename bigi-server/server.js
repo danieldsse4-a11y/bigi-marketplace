@@ -434,6 +434,25 @@ app.post(
   }
 );
 
+// "מומלץ" is not offered here — it comes from the מומלצים list and wins anyway.
+// null clears the choice and puts the profile back on its default badge.
+app.post(
+  '/admin-suppliers/profiles/:key/badge',
+  express.json({ limit: '1kb' }),
+  requireSameOrigin,
+  requireDb,
+  auth.requireAdmin,
+  visibilityLimiter,
+  async (req, res) => {
+    const badge = req.body?.badge;
+    if (badge !== null && typeof badge !== 'string') return res.status(400).json({ error: 'ערך לא תקין' });
+
+    const error = await db.withDb((data) => catalog.setBadge(data, req.params.key, badge, req.adminEmail));
+    if (error) return res.status(400).json({ error });
+    res.json({ key: req.params.key, badge });
+  }
+);
+
 // Deleting is permanent: the profile leaves the database and its uploaded
 // uploaded media are removed. Sample suppliers ship with the site, so they can only be
 // switched to demo — never deleted.

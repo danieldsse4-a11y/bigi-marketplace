@@ -34,6 +34,28 @@ function profileExists(db, key) {
   return Boolean(db.suppliers[key]);
 }
 
+/* ---------- Badges an admin can set per profile. "מומלץ" is not one of them:
+   it belongs to the מומלצים list above and always wins. An empty string means
+   the admin chose no badge at all; no entry means "leave it to the default". */
+const BADGE_CHOICES = ['', 'חדש', 'זמין השבוע'];
+
+function badgeOverride(db, key) {
+  const map = db.badges;
+  return map && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+}
+
+// Returns an error message, or null after saving.
+function setBadge(db, key, badge, adminEmail) {
+  if (typeof key !== 'string' || !profileExists(db, key)) return 'הפרופיל לא נמצא';
+  if (badge !== null && !BADGE_CHOICES.includes(badge)) return 'תג לא תקין';
+  if (!db.badges || typeof db.badges !== 'object') db.badges = {};
+  // null clears the override and goes back to the default badge.
+  if (badge === null) delete db.badges[key];
+  else db.badges[key] = badge;
+  db.badgesUpdated = { at: new Date().toISOString(), by: adminEmail };
+  return null;
+}
+
 // Returns an error message, or null after saving the new order.
 function setFeatured(db, keys, adminEmail) {
   if (!Array.isArray(keys) || keys.some((k) => typeof k !== 'string')) return 'רשימה לא תקינה';
@@ -62,6 +84,8 @@ function adminRows(db) {
         : s.createdBy,
       published: Boolean(s.isPublic),
       featured: featuredRank.has(s.id),
+      badge: badgeOverride(db, s.id),
+      defaultBadge: 'חדש',
       viewUrl: `/supplier/view/${s.id}`,
       image: s.backgroundImage,
     }));
@@ -76,6 +100,8 @@ function adminRows(db) {
     city: v.city,
     published: isSamplePublished(db, v.id),
     featured: featuredRank.has(SAMPLE_KEY_PREFIX + v.id),
+    badge: badgeOverride(db, SAMPLE_KEY_PREFIX + v.id),
+    defaultBadge: v.badge === 'מומלץ' ? '' : (v.badge || ''),
     viewUrl: `/vendor.html?id=${v.id}`,
     emoji: v.emoji,
     grad: v.grad,
@@ -159,10 +185,14 @@ function setPublished(db, key, published, adminEmail) {
 // `hidden`) so sample profile pages still open for them; public lists skip those.
 function publicVendors(db, { isAdmin }) {
   const rank = new Map(featuredKeys(db).map((k, i) => [k, i]));
-  // Only admin-picked suppliers carry the "מומלץ" badge; other badges stay.
-  const featuredFields = (key, otherBadge) => (rank.has(key)
-    ? { badge: 'מומלץ', featuredRank: rank.get(key) }
-    : { badge: otherBadge === 'מומלץ' ? null : otherBadge, featuredRank: null });
+  // Only admin-picked suppliers carry the "מומלץ" badge. Below that an admin's
+  // own choice wins, and only then the badge the profile would get by default.
+  const featuredFields = (key, otherBadge) => {
+    if (rank.has(key)) return { badge: 'מומלץ', featuredRank: rank.get(key) };
+    const chosen = badgeOverride(db, key);
+    const badge = chosen === undefined ? otherBadge : chosen;
+    return { badge: badge && badge !== 'מומלץ' ? badge : null, featuredRank: null };
+  };
 
   const samples = SAMPLE_VENDORS.flatMap((v) => {
     const vendor = { ...v, ...featuredFields(SAMPLE_KEY_PREFIX + v.id, v.badge) };
@@ -201,4 +231,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, ownProfile, setPublished, deleteProfile, dataJs };
+module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, setBadge, BADGE_CHOICES, ownProfile, setPublished, deleteProfile, dataJs };
