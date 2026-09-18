@@ -19,6 +19,7 @@ function supplierViewPage(supplier, { baseUrl }) {
     name, category, city, description, phone, contactEmail, links,
     backgroundImage, productImages, video,
   } = supplier;
+  const packages = supplier.packages || [];
 
   const categoryLabel = categoryById(category)?.name || category;
   // Link previews (WhatsApp etc.) need absolute image URLs; local-dev uploads are relative.
@@ -115,6 +116,14 @@ function supplierViewPage(supplier, { baseUrl }) {
   .js .tab-panel{ display:none; }
   .js .tab-panel.active{ display:block; }
   .tab-empty{ color:var(--muted); font-size:14px; text-align:center; padding:18px 0; }
+  .package-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+  .package-card{ text-align:start; border:1.5px solid var(--line); border-radius:var(--radius-md); padding:18px; background:#fff; }
+  .package-card h4{ font-size:16px; margin-bottom:6px; }
+  .package-price{ font-size:22px; font-weight:800; color:var(--primary); margin-bottom:12px; }
+  .package-price.is-quote{ font-size:14.5px; font-weight:700; color:var(--muted); }
+  .package-card ul{ list-style:none; margin:0; padding:0; display:grid; gap:7px; font-size:14px; color:var(--ink-soft); }
+  .package-card li{ padding-inline-start:22px; position:relative; }
+  .package-card li::before{ content:"✓"; position:absolute; inset-inline-start:0; color:var(--success); font-weight:800; }
   @media (max-width:760px){
     .js .profile-tabs{ padding:12px 14px 0; gap:6px; }
     .profile-tab{ padding:8px 12px; font-size:13.5px; }
@@ -181,7 +190,13 @@ function supplierViewPage(supplier, { baseUrl }) {
 
     <div class="supplier-section tab-panel" id="panel-packages" role="tabpanel" aria-labelledby="tab-packages">
       <h3>חבילות</h3>
-      <p class="tab-empty">בעל העסק עדיין לא הוסיף חבילות.</p>
+      ${packages.length ? `<div class="package-grid">${packages.map((p) => `
+        <article class="package-card">
+          <h4>${escapeHtml(p.name)}</h4>
+          <div class="package-price${p.price ? '' : ' is-quote'}">${p.price ? `₪${Number(p.price).toLocaleString('he-IL')}` : 'מחיר בהתאם להצעה'}</div>
+          ${p.items && p.items.length ? `<ul>${p.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
+        </article>`).join('')}</div>`
+        : '<p class="tab-empty">בעל העסק עדיין לא הוסיף חבילות.</p>'}
     </div>
 
     <div class="supplier-section tab-panel" id="panel-reviews" role="tabpanel" aria-labelledby="tab-reviews">

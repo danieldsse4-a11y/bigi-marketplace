@@ -135,6 +135,7 @@ function ownProfile(db, userId) {
     phone: s.phone || '',
     contactEmail: s.contactEmail || '',
     links: s.links || '',
+    packages: s.packages || [],
     backgroundImage: s.backgroundImage,
     productImages: s.productImages,
     video: s.video || null,

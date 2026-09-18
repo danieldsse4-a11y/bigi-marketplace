@@ -10,6 +10,9 @@ const MIN_PRODUCT_IMAGES = 5;
 const MAX_PRODUCT_IMAGES = 10;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 45 * 1024 * 1024;
+const MAX_PACKAGES = 6;
+const MAX_PACKAGE_ITEMS = 12;
+const MAX_PRICE = 1000000;
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
@@ -53,6 +56,7 @@ function readForm(req) {
     phone: text('phone'),
     contactEmail: text('contactEmail'),
     links: text('links'),
+    packages: text('packages'),
     videoLink: text('videoLink'),
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     productFiles: req.files?.productImages || [],
@@ -87,6 +91,57 @@ function normalizeVideoLink(raw) {
   return { kind: 'link', url: url.href };
 }
 
+/* The packages arrive as a JSON string in one form field — the rows are
+   dynamic and every one carries several fields, so this keeps them together
+   instead of relying on the position of many parallel fields.
+   Returns { value } or { error }. The price is optional: null means "no price". */
+function parseJsonArray(raw, what) {
+  if (!raw) return { value: [] };
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return { error: `${what} לא תקינות.` }; }
+  if (!Array.isArray(parsed)) return { error: `${what} לא תקינות.` };
+  return { value: parsed };
+}
+
+function normalizePackages(raw) {
+  const list = parseJsonArray(raw, 'החבילות');
+  if (list.error) return list;
+  if (list.value.length > MAX_PACKAGES) return { error: `אפשר להוסיף עד ${MAX_PACKAGES} חבילות.` };
+
+  const value = [];
+  for (const [i, entry] of list.value.entries()) {
+    const label = `חבילה ${i + 1}`;
+    if (!entry || typeof entry !== 'object') return { error: `${label}: הנתונים לא תקינים.` };
+
+    const name = String(entry.name ?? '').trim();
+    if (!name) return { error: `${label}: יש להזין שם לחבילה.` };
+    if (name.length > 60) return { error: `${label}: השם ארוך מדי (עד 60 תווים).` };
+
+    let price = null;
+    if (entry.price !== null && entry.price !== undefined && String(entry.price).trim() !== '') {
+      price = Number(entry.price);
+      if (!Number.isInteger(price) || price < 1 || price > MAX_PRICE) {
+        return { error: `${label}: המחיר חייב להיות מספר שלם חיובי, או להישאר ריק.` };
+      }
+    }
+
+    const rawItems = Array.isArray(entry.items) ? entry.items : [];
+    const items = rawItems.map((item) => String(item ?? '').trim()).filter(Boolean);
+    if (items.length > MAX_PACKAGE_ITEMS) return { error: `${label}: אפשר לפרט עד ${MAX_PACKAGE_ITEMS} דברים בחבילה.` };
+    if (items.some((item) => item.length > 100)) return { error: `${label}: אחד הפריטים ארוך מדי (עד 100 תווים).` };
+
+    value.push({ name, price, items });
+  }
+  return { value };
+}
+
+// Everything the form sends as structured data, checked in one place.
+function parseExtras(form) {
+  const packages = normalizePackages(form.packages);
+  if (packages.error) return { error: packages.error };
+  return { packages: packages.value };
+}
+
 // Returns an error message for the form, or null when it's valid.
 function validateForm(form) {
   if (!form.name) return 'שם העסק הוא שדה חובה.';
@@ -103,7 +158,7 @@ function validateForm(form) {
   if (form.videoFile && form.videoLink) return 'יש לבחור סרטון להעלאה או להדביק קישור — לא את שניהם.';
   const normalizedLink = normalizeVideoLink(form.videoLink);
   if (normalizedLink?.error) return normalizedLink.error;
-  return null;
+  return parseExtras(form).error || null;
 }
 
 // Uploads the photos and returns the new (demo) supplier record.
@@ -129,6 +184,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
     phone: form.phone,
     contactEmail: form.contactEmail,
     links: form.links,
+    packages: parseExtras(form).packages,
     backgroundImage,
     productImages,
     video,
@@ -141,4 +197,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
   };
 }
 
-module.exports = { MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink };
+module.exports = {
+  MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES,
+  parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink, normalizePackages,
+};

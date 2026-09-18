@@ -838,9 +838,75 @@
     });
   }
 
+  /* The optional, repeatable parts of a profile (packages and, below, the link
+     buttons). Shared by the sign-up form and the edit page so they behave the
+     same. Rows carry no `name`, so nothing is submitted by accident: collect()
+     returns plain data and the caller sends it as one JSON field. */
+  const MAX_PACKAGES = 6;
+
+  function mountExtrasEditor(root, initial){
+    if(!root) return { collect: () => ({ packages: [] }) };
+    initial = initial || {};
+
+    root.innerHTML = `
+      <div class="extras-block">
+        <label class="extras-title">חבילות (לא חובה)</label>
+        <div class="field-hint">אפשר להוסיף עד ${MAX_PACKAGES} חבילות. המחיר לא חובה — בלי מחיר יופיע ללקוחות "מחיר בהתאם להצעה", ואפשר לעדכן אותו בכל רגע דרך עריכת הפרופיל.</div>
+        <div class="extras-rows" data-rows="packages"></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-add="packages">+ הוספת חבילה</button>
+      </div>`;
+
+    const pkgRows = $('[data-rows="packages"]', root);
+    const pkgAdd = $('[data-add="packages"]', root);
+
+    function renumber(){
+      $$('.pkg-row', pkgRows).forEach((row, i) => { $('.extras-row-title', row).textContent = `חבילה ${i + 1}`; });
+      pkgAdd.hidden = $$('.pkg-row', pkgRows).length >= MAX_PACKAGES;
+    }
+
+    function addPackage(pkg){
+      pkg = pkg || {};
+      const row = document.createElement('div');
+      row.className = 'extras-row pkg-row';
+      row.innerHTML = `
+        <div class="extras-row-head">
+          <strong class="extras-row-title"></strong>
+          <button type="button" class="extras-remove" aria-label="הסרת החבילה">✕</button>
+        </div>
+        <input type="text" class="pkg-name" maxlength="60" placeholder="שם החבילה, למשל: חבילת בסיס">
+        <input type="number" class="pkg-price" min="1" max="1000000" step="1" inputmode="numeric" placeholder="מחיר ב־₪ (לא חובה)">
+        <textarea class="pkg-items" rows="3" placeholder="מה כלול בחבילה? כל שורה היא פריט אחד"></textarea>`;
+      $('.pkg-name', row).value = pkg.name || '';
+      $('.pkg-price', row).value = pkg.price || '';
+      $('.pkg-items', row).value = (pkg.items || []).join('\n');
+      pkgRows.appendChild(row);
+      renumber();
+    }
+
+    pkgAdd.addEventListener('click', () => { if($$('.pkg-row', pkgRows).length < MAX_PACKAGES) addPackage(); });
+    pkgRows.addEventListener('click', (e) => {
+      const remove = e.target.closest('.extras-remove');
+      if(remove){ remove.closest('.pkg-row').remove(); renumber(); }
+    });
+    (initial.packages || []).forEach(addPackage);
+    renumber();
+
+    return {
+      collect(){
+        const packages = $$('.pkg-row', pkgRows).map(row => ({
+          name: $('.pkg-name', row).value.trim(),
+          price: $('.pkg-price', row).value.trim(),
+          items: $('.pkg-items', row).value.split('\n').map(s => s.trim()).filter(Boolean),
+        })).filter(p => p.name || p.price !== '' || p.items.length);
+        return { packages };
+      }
+    };
+  }
+
   function initJoinPage(){
     const form = $('#supplier-form');
     if(!form) return;
+    const extrasEditor = mountExtrasEditor($('#extras-editor'));
 
     const show = (id) => {
       ['join-loading', 'join-guest', 'join-customer', 'join-done'].forEach(s => $('#' + s).hidden = s !== id);
@@ -910,7 +976,9 @@
       errorBox.hidden = true;
       submitBtn.disabled = true;
       submitBtn.textContent = 'שולח ומעלה תמונות…';
-      const { ok, data } = await api('/api/supplier/profile', { method: 'POST', formData: new FormData(form) });
+      const formData = new FormData(form);
+      formData.set('packages', JSON.stringify(extrasEditor.collect().packages));
+      const { ok, data } = await api('/api/supplier/profile', { method: 'POST', formData });
       submitBtn.disabled = false;
       submitBtn.textContent = 'שליחת הפרופיל לאישור';
       if(ok){ showDone(data.profile); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
