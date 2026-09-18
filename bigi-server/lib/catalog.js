@@ -111,6 +111,7 @@ function ownProfile(db, userId) {
     links: s.links || '',
     backgroundImage: s.backgroundImage,
     productImages: s.productImages,
+    video: s.video || null,
     published: Boolean(s.isPublic),
     createdAt: s.createdAt,
     viewUrl: `/supplier/view/${s.id}`,
