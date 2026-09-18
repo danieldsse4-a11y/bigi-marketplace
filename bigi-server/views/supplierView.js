@@ -9,12 +9,19 @@ const { summarize } = require('../lib/reviews');
 // full-viewport fixed background image, which the shared admin shell isn't
 // built for.
 
-function waLink(phone, name) {
+// The name the supplier sees in the WhatsApp message, so they know where the
+// enquiry came from.
+const SITE_NAME = 'ספקים קלאב';
+
+function waLink(phone, text) {
   const intl = normalizePhone(phone);
   if (!intl) return null;
-  const msg = encodeURIComponent(`שלום ${name}, ראיתי את הפרופיל שלכם ורציתי לשאול לגבי זמינות ומחיר.`);
-  return `https://wa.me/${intl}?text=${msg}`;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
 }
+
+const priceText = (price) => (price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר בהתאם להצעה');
+
+const whatsappIcon = '<svg viewBox="0 0 32 32" fill="currentColor" width="17" height="17" aria-hidden="true"><path d="M16.03 3C9.13 3 3.53 8.6 3.53 15.5c0 2.36.65 4.56 1.78 6.45L3 29l7.24-2.26a12.4 12.4 0 0 0 5.79 1.44h.01c6.9 0 12.5-5.6 12.5-12.5S22.93 3 16.03 3zm0 22.6h-.01a10.4 10.4 0 0 1-5.3-1.45l-.38-.22-4.3 1.34 1.37-4.2-.25-.4a10.32 10.32 0 0 1-1.6-5.57c0-5.75 4.68-10.43 10.44-10.43 2.79 0 5.4 1.09 7.38 3.06a10.35 10.35 0 0 1 3.05 7.38c0 5.75-4.68 10.43-10.4 10.43zm5.72-7.82c-.31-.16-1.86-.92-2.15-1.02-.29-.1-.5-.16-.71.16-.21.31-.82 1.02-1 1.23-.19.21-.37.23-.68.08-.31-.16-1.32-.49-2.51-1.56-.93-.83-1.56-1.85-1.74-2.16-.18-.31-.02-.48.14-.63.14-.14.31-.37.47-.55.16-.19.21-.31.31-.52.1-.21.05-.39-.02-.55-.08-.16-.71-1.72-.98-2.36-.26-.62-.52-.54-.71-.55h-.6c-.21 0-.55.08-.84.39-.29.31-1.1 1.08-1.1 2.62 0 1.54 1.13 3.03 1.29 3.24.16.21 2.22 3.39 5.38 4.75.75.33 1.34.52 1.8.66.76.24 1.44.21 1.99.13.61-.09 1.86-.76 2.12-1.5.26-.73.26-1.36.18-1.5-.08-.13-.29-.21-.6-.37z"/></svg>';
 
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
 const starsText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
@@ -70,6 +77,13 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   } = supplier;
   const packages = supplier.packages || [];
   const logo = supplier.logo || null;
+  // A supplier with no packages gets no חבילות tab at all, rather than a tab
+  // that only ever says there is nothing here.
+  const tabs = [
+    { id: 'about', label: 'אודות' },
+    ...(packages.length ? [{ id: 'packages', label: 'חבילות' }] : []),
+    { id: 'reviews', label: 'ביקורות' },
+  ];
 
   const categoryLabel = categoryById(category)?.name || category;
   // Link previews (WhatsApp etc.) need absolute image URLs; local-dev uploads are relative.
@@ -79,7 +93,7 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   const shareDescription = description
     ? (description.length > 150 ? `${description.slice(0, 150)}…` : description)
     : `${shareSummary} — בביגי ספקים`;
-  const whatsapp = waLink(phone, name);
+  const whatsapp = waLink(phone, `שלום ${name}, מצאתי אתכם ב${SITE_NAME} ורציתי לשאול לגבי זמינות ומחיר.`);
   const socialLinks = socialLinksOf(supplier);
 
   return `<!DOCTYPE html>
@@ -202,14 +216,32 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   }
   a.social-btn:hover{ background:var(--primary); color:#fff; }
   .social-btn.is-text{ background:var(--bg-soft); color:var(--ink-soft); }
-  .package-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
-  .package-card{ text-align:start; border:1.5px solid var(--line); border-radius:var(--radius-md); padding:18px; background:#fff; }
-  .package-card h4{ font-size:16px; margin-bottom:6px; }
-  .package-price{ font-size:22px; font-weight:800; color:var(--primary); margin-bottom:12px; }
-  .package-price.is-quote{ font-size:14.5px; font-weight:700; color:var(--muted); }
-  .package-card ul{ list-style:none; margin:0; padding:0; display:grid; gap:7px; font-size:14px; color:var(--ink-soft); }
-  .package-card li{ padding-inline-start:22px; position:relative; }
-  .package-card li::before{ content:"✓"; position:absolute; inset-inline-start:0; color:var(--success); font-weight:800; }
+  .package-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; }
+  .package-card{
+    display:flex; flex-direction:column; text-align:start; position:relative; overflow:hidden;
+    border:1.5px solid var(--line); border-radius:var(--radius-lg); padding:22px 20px; background:#fff;
+    transition:border-color .25s var(--ease-out), transform .25s var(--ease-out), box-shadow .25s var(--ease-out);
+  }
+  /* A coloured edge along the top, so a row of cards doesn't read as plain boxes */
+  .package-card::before{ content:""; position:absolute; inset-inline:0; top:0; height:4px; background:var(--grad-main); }
+  .package-card:hover{ border-color:var(--primary-light); transform:translateY(-4px); box-shadow:var(--shadow-md); }
+  .package-card h4{ font-size:17px; margin-bottom:8px; }
+  .package-price{
+    font-size:30px; font-weight:800; line-height:1.15; margin-bottom:14px;
+    background:var(--grad-main); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .package-price.is-quote{
+    font-size:15px; font-weight:700; color:var(--muted);
+    background:none; -webkit-text-fill-color:currentColor;
+  }
+  .package-card ul{ list-style:none; margin:0 0 18px; padding:0; display:grid; gap:9px; font-size:14px; color:var(--ink-soft); }
+  .package-card li{ padding-inline-start:24px; position:relative; line-height:1.5; }
+  .package-card li::before{
+    content:"✓"; position:absolute; inset-inline-start:0; top:1px; width:17px; height:17px; border-radius:50%;
+    background:#E6F9F5; color:var(--success); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
+  }
+  /* Pushed to the bottom so every button in the row lines up */
+  .package-cta{ margin-top:auto; justify-content:center; font-size:14.5px; padding:13px 18px; }
   @media (max-width:760px){
     .profile-hero-brand{ gap:12px; }
     .profile-logo{ width:56px; height:56px; border-radius:14px; padding:5px; }
@@ -261,9 +293,7 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   <div class="supplier-glass-card">
 
     <div class="profile-tabs" role="tablist" aria-label="חלקי הפרופיל">
-      <button type="button" class="profile-tab" role="tab" id="tab-about" aria-controls="panel-about" data-tab="about" aria-selected="true">אודות</button>
-      <button type="button" class="profile-tab" role="tab" id="tab-packages" aria-controls="panel-packages" data-tab="packages" aria-selected="false" tabindex="-1">חבילות</button>
-      <button type="button" class="profile-tab" role="tab" id="tab-reviews" aria-controls="panel-reviews" data-tab="reviews" aria-selected="false" tabindex="-1">ביקורות</button>
+      ${tabs.map((tab, i) => `<button type="button" class="profile-tab" role="tab" id="tab-${tab.id}" aria-controls="panel-${tab.id}" data-tab="${tab.id}" aria-selected="${i === 0}"${i === 0 ? '' : ' tabindex="-1"'}>${tab.label}</button>`).join('')}
     </div>
 
     <div class="supplier-section tab-panel active" id="panel-about" role="tabpanel" aria-labelledby="tab-about">
@@ -282,16 +312,20 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
       </div>` : ''}` : '<p class="tab-empty">בעל העסק עדיין לא הוסיף פרטים.</p>'}
     </div>
 
+    ${!packages.length ? '' : `
     <div class="supplier-section tab-panel" id="panel-packages" role="tabpanel" aria-labelledby="tab-packages">
       <h3>חבילות</h3>
-      ${packages.length ? `<div class="package-grid">${packages.map((p) => `
+      <div class="package-grid">${packages.map((p) => {
+        const enquiry = waLink(phone, `שלום ${name}, מצאתי אתכם ב${SITE_NAME} ואני מעוניין/ת ב"${p.name}" (${priceText(p.price)}) לאירוע שלי. מה הזמינות שלכם?`);
+        return `
         <article class="package-card">
           <h4>${escapeHtml(p.name)}</h4>
-          <div class="package-price${p.price ? '' : ' is-quote'}">${p.price ? `₪${Number(p.price).toLocaleString('he-IL')}` : 'מחיר בהתאם להצעה'}</div>
+          <div class="package-price${p.price ? '' : ' is-quote'}">${escapeHtml(priceText(p.price))}</div>
           ${p.items && p.items.length ? `<ul>${p.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
-        </article>`).join('')}</div>`
-        : '<p class="tab-empty">בעל העסק עדיין לא הוסיף חבילות.</p>'}
-    </div>
+          ${enquiry ? `<a class="btn whatsapp-cta btn-block package-cta" href="${enquiry}" target="_blank" rel="noopener">${whatsappIcon} בחרו חבילה בוואטסאפ</a>` : ''}
+        </article>`;
+      }).join('')}</div>
+    </div>`}
 
     <div class="supplier-section tab-panel" id="panel-reviews" role="tabpanel" aria-labelledby="tab-reviews">
       ${reviewsPanel(supplier, reviews, viewer)}
@@ -363,7 +397,8 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   });
   function fromHash(){
     var name = location.hash.slice(1);
-    if(['about', 'packages', 'reviews'].indexOf(name) !== -1) select(name);
+    // A profile with no packages has no such tab, so the link is simply ignored.
+    if(tabs.some(function(tab){ return tab.getAttribute('data-tab') === name; })) select(name);
   }
   fromHash();
   window.addEventListener('hashchange', fromHash);
