@@ -868,7 +868,7 @@
         <div class="product-photo-fields">
           <label class="product-photo-label"></label>
           <input type="file" name="productImages" accept="image/png,image/jpeg,image/webp" required>
-          <input type="text" name="productCaptions" required maxlength="200" placeholder="מה רואים בתמונה הזו?" class="photo-caption-input">
+          <input type="text" name="productCaptions" maxlength="200" placeholder="תיאור קצר לתמונה (מומלץ)" class="photo-caption-input">
         </div>
         ${removable ? '<button type="button" class="remove-row-btn" aria-label="הסרת תמונה">✕</button>' : ''}`;
       rows.appendChild(row);
@@ -972,9 +972,9 @@
            </figure>`;
 
       $('#dash-photos').innerHTML = videoTile + p.productImages.map(img => `
-        <figure class="dash-photo" data-lb-type="image" data-lb-src="${esc(img.file)}" data-lb-caption="${esc(img.caption)}">
-          <img src="${esc(img.file)}" alt="${esc(img.caption)}" loading="lazy">
-          <figcaption>${esc(img.caption)}</figcaption>
+        <figure class="dash-photo" data-lb-type="image" data-lb-src="${esc(img.file)}" data-lb-caption="${esc(img.caption || '')}">
+          <img src="${esc(img.file)}" alt="${esc(img.caption || `תמונה של ${p.name}`)}" loading="lazy">
+          ${img.caption ? `<figcaption>${esc(img.caption)}</figcaption>` : ''}
         </figure>`).join('');
       if(window.Lightbox) window.Lightbox.attach($('#dash-photos'));
     }
