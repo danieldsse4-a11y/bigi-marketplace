@@ -114,7 +114,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
   for (const [i, file] of form.productFiles.entries()) {
     productImages.push({
       file: await storage.saveImage(id, file),
-      caption: String(form.captions[i] || '').trim().slice(0, 200) || 'ללא תיאור',
+      caption: String(form.captions[i] || '').trim().slice(0, 200),
     });
   }
   const video = form.videoFile

@@ -170,9 +170,9 @@ function supplierViewPage(supplier, { baseUrl }) {
           </figure>
         `}
         ${productImages.map((p) => `
-          <figure class="supplier-gallery-item" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}">
-            <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption)}">
-            <figcaption>${escapeHtml(p.caption)}</figcaption>
+          <figure class="supplier-gallery-item" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption || '')}">
+            <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption || `תמונה של ${name}`)}">
+            ${p.caption ? `<figcaption>${escapeHtml(p.caption)}</figcaption>` : ''}
           </figure>
         `).join('')}
       </div>
