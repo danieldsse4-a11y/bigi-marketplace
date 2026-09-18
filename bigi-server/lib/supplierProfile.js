@@ -270,7 +270,10 @@ function linkFields(form) {
   const socialLinks = parseExtras(form).socialLinks;
   if (socialLinks.length || !form.links) return { socialLinks, links: '' };
   const url = normalizeUrl(form.links);
-  return url ? { socialLinks: [{ label: 'קישור', url }], links: '' } : { socialLinks: [], links: form.links };
+  if (url) return { socialLinks: [{ label: 'קישור', url }], links: '' };
+  // Not an address: keep the text where socialLinksOf will find it. An explicit
+  // empty socialLinks list here would hide it.
+  return { links: form.links };
 }
 
 // Uploads the photos and returns the new (demo) supplier record.
