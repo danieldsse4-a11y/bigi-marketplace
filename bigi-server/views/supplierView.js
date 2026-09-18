@@ -17,7 +17,7 @@ function waLink(phone, name) {
 function supplierViewPage(supplier, { baseUrl }) {
   const {
     name, category, city, description, phone, contactEmail, links,
-    backgroundImage, productImages,
+    backgroundImage, productImages, video,
   } = supplier;
 
   const categoryLabel = categoryById(category)?.name || category;
@@ -155,10 +155,22 @@ function supplierViewPage(supplier, { baseUrl }) {
     </div>` : ''}
 
     <div class="supplier-section">
-      <h3>תמונות</h3>
+      <h3>${video ? 'תמונות וסרטון' : 'תמונות'}</h3>
       <div class="gallery-grid">
+        ${!video ? '' : video.kind === 'link' ? `
+          <a class="supplier-gallery-item media-tile" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"
+             style="background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;">
+            <span class="media-tile-label">סרטון</span>
+          </a>
+        ` : `
+          <figure class="supplier-gallery-item media-tile" style="margin:0; background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;"
+             data-lb-type="${video.embed ? 'embed' : 'video'}" data-lb-src="${escapeHtml(video.embed || video.url)}"
+             data-lb-poster="${escapeHtml(backgroundImage)}" data-lb-caption="${escapeHtml(name)}">
+            <span class="media-tile-label">סרטון</span>
+          </figure>
+        `}
         ${productImages.map((p) => `
-          <figure class="supplier-gallery-item" style="margin:0;">
+          <figure class="supplier-gallery-item" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}">
             <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption)}">
             <figcaption>${escapeHtml(p.caption)}</figcaption>
           </figure>
@@ -176,6 +188,9 @@ function supplierViewPage(supplier, { baseUrl }) {
     </div>
   </div>
 </footer>
+
+<script src="/lightbox.js"></script>
+<script>window.Lightbox && window.Lightbox.attach(document.querySelector('.gallery-grid'));</script>
 
 </body>
 </html>`;
