@@ -109,6 +109,36 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           addBtn.hidden = rows.length >= MAX_PRODUCT_IMAGES;
         }
 
+        // The browser's own file control is English and left-to-right; the real
+        // input stays in the page (still focusable when the form is invalid)
+        // but sits transparent on top of a Hebrew label.
+        var EMPTY = 'לא נבחרה תמונה';
+        function enhanceFileInput(input){
+          if(input.dataset.enhanced) return;
+          input.dataset.enhanced = '1';
+          var drop = document.createElement('label');
+          drop.className = 'file-drop';
+          input.parentNode.insertBefore(drop, input);
+          drop.appendChild(input);
+          var button = document.createElement('span');
+          button.className = 'file-drop-btn';
+          button.textContent = 'בחרו תמונה';
+          var fileName = document.createElement('span');
+          fileName.className = 'file-drop-name';
+          fileName.textContent = EMPTY;
+          drop.appendChild(button);
+          drop.appendChild(fileName);
+          input.addEventListener('change', function(){
+            var picked = input.files && input.files[0];
+            fileName.textContent = picked ? picked.name : EMPTY;
+            drop.classList.toggle('has-file', Boolean(picked));
+          });
+        }
+        function enhanceAll(){
+          document.querySelectorAll('input[type=file]').forEach(enhanceFileInput);
+        }
+        enhanceAll();
+
         addBtn.addEventListener('click', function(){
           var rows = rowsContainer.querySelectorAll('[data-photo-row]');
           if(rows.length >= MAX_PRODUCT_IMAGES) return;
@@ -123,6 +153,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
             '</div>' +
             '<button type="button" class="remove-row-btn" title="הסרת תמונה" style="flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; align-self:flex-start; margin-top:22px;">✕</button>';
           rowsContainer.appendChild(div);
+          enhanceFileInput(div.querySelector('input[type=file]'));
           renumber();
         });
 

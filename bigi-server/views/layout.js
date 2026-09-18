@@ -44,6 +44,21 @@ function page({ title, body, extraHead = '', wide = false }) {
   .product-photo-row{ display:flex; gap:12px; align-items:flex-start; border:1px solid var(--line); border-radius:var(--radius-md); padding:14px; margin-bottom:12px; }
   .product-photo-row .form-field{ flex:1; margin-bottom:0; }
   .product-photo-row input[type=file]{ width:100%; font-size:13px; }
+  /* Hebrew stand-in for the browser's own file button (see enhanceFileInput) */
+  .file-drop{
+    position:relative; display:flex; align-items:center; gap:10px; min-width:0;
+    padding:9px 12px; border:1.5px dashed var(--line); border-radius:var(--radius-md);
+    background:var(--bg-soft); cursor:pointer; transition:border-color .25s, background .25s;
+  }
+  .file-drop:hover{ border-color:var(--primary); }
+  .file-drop input[type=file]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .file-drop-btn{
+    padding:7px 14px; border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary);
+    font-weight:700; font-size:13px; white-space:nowrap; flex-shrink:0;
+  }
+  .file-drop-name{ font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-drop.has-file{ border-style:solid; border-color:var(--primary); background:#fff; }
+  .file-drop.has-file .file-drop-name{ color:var(--ink); font-weight:600; }
   .remove-row-btn:hover{ background:var(--accent); color:#fff; }
   .bg-preview-note{ background:var(--primary-soft); color:var(--primary); border-radius:var(--radius-md); padding:10px 14px; font-size:12.5px; margin-top:8px; }
   .link-box{ display:flex; gap:8px; align-items:center; background:var(--bg-soft); border:1px dashed var(--line); border-radius:var(--radius-md); padding:12px 14px; font-size:13px; word-break:break-all; }

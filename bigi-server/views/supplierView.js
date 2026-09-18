@@ -73,13 +73,13 @@ function supplierViewPage(supplier, { baseUrl }) {
     background:linear-gradient(180deg, rgba(20,17,38,0.5), rgba(20,17,38,0.7));
   }
 
-  /* A frosted-glass card instead of the site's normal solid-white profile
-     card — a flat opaque block looked out of place floating over a photo;
-     this keeps the same shape/shadow but lets the photo read through. */
+  /* Solid white, like the rest of the site's cards. A translucent "glass" card
+     over a dark photo left the text at roughly 2:1 contrast — and browsers
+     without backdrop-filter made it worse — so readability wins here. */
   .supplier-glass-card{
-    background:rgba(255,255,255,0.82); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
-    border:1px solid rgba(255,255,255,0.4);
-    border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
+    background:var(--white);
+    border:1px solid rgba(255,255,255,0.5);
+    border-radius:var(--radius-lg); box-shadow:0 24px 60px rgba(10,8,24,0.45);
     margin-top:-56px; position:relative; z-index:5;
   }
   .supplier-section{ padding:28px 32px; border-bottom:1px solid rgba(0,0,0,0.06); }

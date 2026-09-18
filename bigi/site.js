@@ -29,7 +29,7 @@
   /* ---------- Compare state (localStorage) ---------- */
   const CompareStore = {
     key: 'bigi_compare',
-    get(){ try{ return JSON.parse(localStorage.getItem(this.key)) || []; }catch(e){ return []; } },
+    get(){ try{ return (JSON.parse(localStorage.getItem(this.key)) || []).map(idOf); }catch(e){ return []; } },
     set(list){ localStorage.setItem(this.key, JSON.stringify(list)); document.dispatchEvent(new CustomEvent('compare:change')); },
     add(id){ const l = this.get(); if(!l.includes(id) && l.length < 4){ l.push(id); this.set(l);} return this.get(); },
     remove(id){ this.set(this.get().filter(x=>x!==id)); },
@@ -41,7 +41,9 @@
   /* ---------- Favorites state (localStorage) ---------- */
   const FavoritesStore = {
     key: 'bigi_favorites',
-    get(){ try{ return JSON.parse(localStorage.getItem(this.key)) || []; }catch(e){ return []; } },
+    // Ids are normalised on the way out, so a list saved by an older version of
+    // the site (numbers stored as text) still matches the vendors.
+    get(){ try{ return (JSON.parse(localStorage.getItem(this.key)) || []).map(idOf); }catch(e){ return []; } },
     set(list){ localStorage.setItem(this.key, JSON.stringify(list)); document.dispatchEvent(new CustomEvent('favorites:change')); },
     add(id){ const l = this.get(); if(!l.includes(id)){ l.push(id); this.set(l);} return this.get(); },
     remove(id){ this.set(this.get().filter(x=>x!==id)); },
@@ -288,7 +290,7 @@
     const deals = listedVendors().filter(v => v.badge && v.priceFrom != null).slice(0, 3);
     const badgeClass = { 'מומלץ':'badge-top', 'זמין השבוע':'badge-hot', 'חדש':'badge-new' };
     grid.innerHTML = deals.map(v => `
-      <div class="deal-card reveal">
+      <a class="deal-card reveal" href="${esc(profileUrl(v))}">
         <div class="deal-media ${v.grad}">
           <span class="badge ${badgeClass[v.badge]}">${esc(v.badge)}</span>
           ${esc(v.emoji)}
@@ -296,9 +298,12 @@
         <div class="deal-body">
           <h4>${esc(v.name)}</h4>
           <p>${esc(v.tag)} · ${esc(v.city)}</p>
-          <div class="deal-price"><strong>${formatPrice(v.priceFrom)}</strong><span>החל מ־</span></div>
+          <div class="deal-row">
+            <div class="deal-price"><strong>${formatPrice(v.priceFrom)}</strong><span>החל מ־</span></div>
+            <span class="deal-link">לפרופיל ←</span>
+          </div>
         </div>
-      </div>
+      </a>
     `).join('');
   }
 
@@ -312,7 +317,7 @@
     <div class="vendor-card stagger-in" style="animation-delay:${(index%9)*60}ms" data-vendor-id="${id}">
       <div class="vendor-media ${v.image ? 'has-photo' : v.grad}"${v.image ? ` style="background-image:url('${esc(encodeURI(v.image).replace(/'/g, '%27'))}')"` : ''}>
         ${v.badge ? `<span class="badge ${badgeClass[v.badge] || 'badge-new'}">${esc(v.badge)}</span>` : ''}
-        <button class="vendor-fav ${isFav?'active':''}" aria-label="הוסף למועדפים" data-fav="${id}">${isFav?'❤️':'🤍'}</button>
+        <button class="vendor-fav ${isFav?'active':''}" aria-label="הוסף למועדפים" data-fav="${id}">${isFav?'♥':'♡'}</button>
         <button class="vendor-compare-btn ${CompareStore.has(v.id)?'active':''}" data-compare="${id}">⇄ השוואה</button>
         ${v.image ? '' : esc(v.emoji)}
       </div>
@@ -421,7 +426,7 @@
     $$('[data-fav]').forEach(btn => {
       const active = list.includes(idOf(btn.dataset.fav));
       btn.classList.toggle('active', active);
-      btn.textContent = active ? '❤️' : '🤍';
+      btn.textContent = active ? '♥' : '♡';
     });
   }
   document.addEventListener('favorites:change', renderFavoritesUI);
@@ -701,15 +706,22 @@
 
     $('#load-more-btn')?.addEventListener('click', () => { state.page++; render(); });
 
-    // Collapsible filters panel (starts closed — pops open downward on click)
+    // Collapsible filters panel. On a wide screen the filters sit in their own
+    // column, so they start open; on a phone they would push the results down,
+    // so they start closed.
     const filtersToggle = $('#filters-toggle');
     const filtersBody = $('#filters-body');
     if(filtersToggle && filtersBody){
+      const setFilters = (open) => {
+        filtersToggle.setAttribute('aria-expanded', String(open));
+        filtersBody.style.maxHeight = open ? filtersBody.scrollHeight + 'px' : '0px';
+      };
       filtersToggle.addEventListener('click', () => {
-        const open = filtersToggle.getAttribute('aria-expanded') === 'true';
-        filtersToggle.setAttribute('aria-expanded', String(!open));
-        filtersBody.style.maxHeight = open ? '0px' : filtersBody.scrollHeight + 'px';
+        setFilters(filtersToggle.getAttribute('aria-expanded') !== 'true');
       });
+      const wide = window.matchMedia('(min-width:1081px)');
+      setFilters(wide.matches);
+      wide.addEventListener('change', (e) => setFilters(e.matches));
       // Keep the expanded panel's height correct if its content changes (e.g. active filter counts)
       new ResizeObserver(() => {
         if(filtersToggle.getAttribute('aria-expanded') === 'true'){
@@ -740,10 +752,27 @@
     document.title = v.name + ' — ביגי ספקים';
     if(v.badge) $('#profile-badges').innerHTML = `<span class="badge badge-top" style="position:static;display:inline-block;">${v.badge}</span>`;
 
-    // Gallery
+    // Quick facts, so the wide hero isn't half empty on a desktop screen
+    const facts = [
+      v.priceFrom != null ? ['מחיר התחלתי', `מ־${formatPrice(v.priceFrom)}`] : null,
+      v.rating != null ? ['דירוג לקוחות', `${v.rating} ★`] : null,
+      v.reviews != null ? ['ביקורות', String(v.reviews)] : null,
+      v.city ? ['אזור פעילות', v.city] : null,
+    ].filter(Boolean);
+    const factsBox = $('#profile-facts');
+    if(factsBox) factsBox.innerHTML = facts
+      .map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`)
+      .join('');
+
+    // Gallery. These sample suppliers have no real photos, so the tiles stay
+    // deliberately abstract — the supplier's own icon on the brand gradients,
+    // rather than a scatter of unrelated emoji.
     const gallery = $('#gallery-grid');
-    const emojis = ['📷','🎬','🖼️','✨','🎉','🏆','💫','📸'];
-    gallery.innerHTML = emojis.map((e,i) => `<div class="gallery-item ${['g1','g2','g3','g4','g5','g6','g7','g8'][i%8]}">${e}</div>`).join('');
+    gallery.innerHTML = ['g1','g2','g3','g4']
+      .map(g => `<div class="gallery-item ${g}" aria-hidden="true">${esc(v.emoji)}</div>`)
+      .join('');
+    const galleryNote = $('#gallery-note');
+    if(galleryNote) galleryNote.textContent = 'התמונות המלאות של האירועים מתווספות על ידי הספק.';
 
     // Packages
     const packagesGrid = $('#packages-grid');
@@ -804,7 +833,7 @@
     function syncFav(){
       const active = FavoritesStore.has(v.id);
       favBtn.classList.toggle('active', active);
-      favBtn.textContent = active ? '❤️' : '🤍';
+      favBtn.textContent = active ? '♥' : '♡';
     }
     favBtn.addEventListener('click', () => {
       FavoritesStore.toggle(v.id);
@@ -856,6 +885,32 @@
   const MIN_PRODUCT_IMAGES = 5;
   const MAX_PRODUCT_IMAGES = 10;
 
+  /* The browser's own file control says "Choose File / No file chosen" in
+     English and reads left-to-right. The input stays in the page (so the
+     browser can still focus it when the form is invalid) but is made
+     transparent and stretched over a Hebrew label. */
+  function enhanceFileInput(input){
+    if(input.dataset.enhanced) return;
+    input.dataset.enhanced = '1';
+    const drop = document.createElement('label');
+    drop.className = 'file-drop';
+    input.parentNode.insertBefore(drop, input);
+    drop.appendChild(input);
+    const button = document.createElement('span');
+    button.className = 'file-drop-btn';
+    button.textContent = 'בחרו תמונה';
+    const fileName = document.createElement('span');
+    fileName.className = 'file-drop-name';
+    const empty = 'לא נבחרה תמונה';
+    fileName.textContent = empty;
+    drop.append(button, fileName);
+    input.addEventListener('change', () => {
+      const picked = input.files && input.files[0];
+      fileName.textContent = picked ? picked.name : empty;
+      drop.classList.toggle('has-file', Boolean(picked));
+    });
+  }
+
   function initJoinPage(){
     const form = $('#supplier-form');
     if(!form) return;
@@ -890,6 +945,7 @@
         </div>
         ${removable ? '<button type="button" class="remove-row-btn" aria-label="הסרת תמונה">✕</button>' : ''}`;
       rows.appendChild(row);
+      enhanceFileInput($('input[type=file]', row));
       renumber();
     }
     function renumber(){
@@ -898,6 +954,7 @@
       addBtn.hidden = all.length >= MAX_PRODUCT_IMAGES;
     }
     for(let i = 0; i < MIN_PRODUCT_IMAGES; i++) addRow(false);
+    enhanceFileInput($('#sf-background'));
     addBtn.addEventListener('click', () => { if($$('.product-photo-row', rows).length < MAX_PRODUCT_IMAGES) addRow(true); });
     rows.addEventListener('click', (e) => {
       const btn = e.target.closest('.remove-row-btn');

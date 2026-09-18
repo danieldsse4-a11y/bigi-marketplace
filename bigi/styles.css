@@ -350,11 +350,15 @@ h3{ font-size:20px; }
    ========================================================================== */
 .deals-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
 .deal-card{
+  display:block; color:inherit;
   position:relative; border-radius:var(--radius-lg); overflow:hidden; background:var(--white);
   border:1px solid var(--line); box-shadow:var(--shadow-sm);
   transition:transform .4s var(--ease-spring), box-shadow .4s var(--ease-out);
 }
 .deal-card:hover{ transform:translateY(-8px); box-shadow:var(--shadow-lg); }
+.deal-row{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.deal-link{ font-size:13.5px; font-weight:700; color:var(--primary); }
+.deal-card:hover .deal-link{ text-decoration:underline; }
 .deal-media{
   height:150px; display:flex; align-items:center; justify-content:center; font-size:48px; position:relative;
 }
@@ -401,13 +405,16 @@ h3{ font-size:20px; }
 }
 .vendor-media.has-photo{ background-color:var(--primary-soft); background-size:cover; background-position:center; }
 .vendor-new-note{ font-size:12.5px; font-weight:700; color:var(--primary); }
+/* A white heart emoji on a white circle was invisible — these are text glyphs
+   so the colour can carry the saved/not-saved state. */
 .vendor-fav{
   position:absolute; top:12px; inset-inline-end:12px; width:34px; height:34px; border-radius:50%;
-  background:rgba(255,255,255,0.85); display:flex; align-items:center; justify-content:center; font-size:15px;
-  transition:transform .3s var(--ease-spring), background .3s;
+  background:var(--white); display:flex; align-items:center; justify-content:center;
+  font-size:19px; line-height:1; color:var(--accent); box-shadow:0 2px 8px rgba(26,23,48,0.18);
+  transition:transform .3s var(--ease-spring), background .3s, color .3s;
 }
 .vendor-fav:hover{ transform:scale(1.15); }
-.vendor-fav.active{ background:var(--white); box-shadow:0 0 0 2px var(--accent-light) inset; }
+.vendor-fav.active{ background:var(--accent); color:#fff; }
 .vendor-compare-btn{
   position:absolute; bottom:12px; inset-inline-start:12px; z-index:2;
   padding:6px 12px; border-radius:var(--radius-pill); background:rgba(255,255,255,0.92); color:var(--ink);
@@ -535,7 +542,7 @@ h3{ font-size:20px; }
 .filters-sidebar{
   position:sticky; top:calc(var(--header-h) + 20px);
   background:var(--white); border:1px solid var(--line); border-radius:var(--radius-lg);
-  overflow:hidden;
+  overflow:hidden auto; max-height:calc(100vh - var(--header-h) - 40px);
 }
 .filters-toggle{
   width:100%; display:flex; align-items:center; justify-content:space-between;
@@ -545,7 +552,9 @@ h3{ font-size:20px; }
 .filters-toggle .chevron{ width:18px; height:18px; color:var(--primary); transition:transform .35s var(--ease-spring); flex-shrink:0; }
 .filters-toggle[aria-expanded="true"] .chevron{ transform:rotate(180deg); }
 .filters-body{ max-height:0; overflow:hidden; transition:max-height .45s var(--ease-out); }
-.filters-body-inner{ padding:2px 22px 22px; }
+/* The generous bottom padding keeps the last control clear of the floating
+   chat button — it can always be scrolled above it. */
+.filters-body-inner{ padding:2px 22px 84px; }
 .filter-group{ margin-bottom:26px; }
 .filter-group:last-child{ margin-bottom:0; }
 .filter-group h4{ font-size:14.5px; margin-bottom:14px; }
@@ -617,6 +626,13 @@ h3{ font-size:20px; }
 .profile-hero h1{ color:#fff; font-size:clamp(24px,3vw,32px); margin-bottom:6px; }
 .profile-hero-meta{ display:flex; gap:16px; flex-wrap:wrap; color:rgba(255,255,255,0.92); font-size:14.5px; }
 .profile-badges{ display:flex; gap:8px; margin-top:10px; }
+.profile-facts{
+  margin-inline-start:auto; display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:12px;
+  background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.28);
+  border-radius:var(--radius-lg); padding:18px 22px; backdrop-filter:blur(6px);
+}
+.profile-facts dt{ font-size:12.5px; color:rgba(255,255,255,0.8); margin-bottom:2px; }
+.profile-facts dd{ font-size:16px; font-weight:800; color:#fff; }
 
 .profile-card{
   background:var(--white); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
@@ -635,9 +651,11 @@ h3{ font-size:20px; }
 
 .gallery-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
 .gallery-item{
-  aspect-ratio:1; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center;
-  font-size:34px; transition:transform .4s var(--ease-spring);
+  aspect-ratio:4/3; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center;
+  font-size:30px; transition:transform .4s var(--ease-spring);
 }
+#gallery-grid .gallery-item{ font-size:34px; box-shadow:inset 0 0 70px rgba(255,255,255,0.22); }
+.gallery-note{ margin-top:16px; font-size:13.5px; color:var(--muted); text-align:center; }
 .gallery-item:hover{ transform:scale(1.05) rotate(-1deg); }
 
 .packages-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
@@ -669,12 +687,13 @@ h3{ font-size:20px; }
 }
 .floating-compare-btn:hover{ transform:translateY(-4px) scale(1.03); }
 .floating-fav-btn{
-  width:56px; height:56px; border-radius:50%; background:var(--white); font-size:22px;
+  width:56px; height:56px; border-radius:50%; background:var(--white); font-size:26px; line-height:1;
+  color:var(--accent);
   display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-lg);
-  transition:transform .35s var(--ease-spring), background .3s;
+  transition:transform .35s var(--ease-spring), background .3s, color .3s;
 }
 .floating-fav-btn:hover{ transform:translateY(-4px) scale(1.08); }
-.floating-fav-btn.active{ background:var(--accent-soft); }
+.floating-fav-btn.active{ background:var(--accent); color:#fff; }
 
 .profile-hero-actions{ margin-top:16px; display:flex; gap:12px; flex-wrap:wrap; }
 .whatsapp-cta{ background:#25D366; color:#fff; display:inline-flex; align-items:center; gap:10px; }
@@ -745,6 +764,24 @@ h3{ font-size:20px; }
 .product-photo-fields{ flex:1; min-width:0; }
 .product-photo-label{ display:block; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; }
 .product-photo-row input[type=file]{ width:100%; font-size:13px; }
+
+/* Hebrew stand-in for the browser's own file button (see enhanceFileInput) */
+.file-drop{
+  position:relative; display:flex; align-items:center; gap:10px; min-width:0;
+  padding:9px 12px; border:1.5px dashed var(--line); border-radius:var(--radius-md);
+  background:var(--bg-soft); cursor:pointer; transition:border-color .25s, background .25s;
+}
+.file-drop:hover{ border-color:var(--primary); }
+.file-drop input[type=file]{
+  position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;
+}
+.file-drop-btn{
+  padding:7px 14px; border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary);
+  font-weight:700; font-size:13px; white-space:nowrap; flex-shrink:0;
+}
+.file-drop-name{ font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-drop.has-file{ border-style:solid; border-color:var(--primary); background:var(--white); }
+.file-drop.has-file .file-drop-name{ color:var(--ink); font-weight:600; }
 .photo-caption-input{ margin-top:8px; width:100%; padding:11px 14px; border-radius:var(--radius-md); border:1.5px solid var(--line); font-size:14px; outline:none; }
 .photo-caption-input:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
 .remove-row-btn{ flex-shrink:0; width:36px; height:36px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:14px; margin-top:22px; }
@@ -856,8 +893,10 @@ h3{ font-size:20px; }
 .assistant-input-row input:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
 .assistant-input-row input:disabled{ background:var(--bg-soft); }
 
+/* Opposite corner from the chat button: on a wide screen the right-hand side
+   belongs to the listing page's filter column, which this would sit on top of. */
 .checklist-bar{
-  position:fixed; bottom:92px; right:24px; z-index:299; width:260px;
+  position:fixed; bottom:24px; left:24px; z-index:299; width:260px;
   background:var(--white); border:1px solid var(--line); border-radius:var(--radius-md);
   box-shadow:var(--shadow-md); overflow:hidden;
 }
@@ -876,12 +915,15 @@ h3{ font-size:20px; }
 .checklist-item.done a{ color:var(--success); }
 .checklist-status{ flex-shrink:0; }
 
-/* The chat replaces the checklist card while it's open (same corner) */
-body:has(.assistant-panel:not([hidden])) .checklist-bar{ display:none; }
-/* Both sit above the compare bar when it slides up */
+/* The vendor page's own floating buttons share this corner, so the list sits
+   above them there. */
+body:has(.floating-actions) .checklist-bar{ bottom:96px; }
+/* Everything floating sits above the compare bar when it slides up */
 body:has(.compare-bar.open) .assistant-fab{ bottom:104px; }
-body:has(.compare-bar.open) .assistant-panel,
-body:has(.compare-bar.open) .checklist-bar{ bottom:172px; }
+body:has(.compare-bar.open) .assistant-panel{ bottom:172px; }
+body:has(.compare-bar.open) .checklist-bar{ bottom:104px; }
+body:has(.compare-bar.open):has(.floating-actions) .checklist-bar{ bottom:176px; }
+body:has(.compare-bar.open) .floating-actions{ bottom:108px; }
 
 /* ==========================================================================
    RESPONSIVE
@@ -915,6 +957,7 @@ body:has(.compare-bar.open) .checklist-bar{ bottom:172px; }
   .packages-grid{ grid-template-columns:1fr; }
   .gallery-grid{ grid-template-columns:repeat(2,1fr); }
   .profile-hero-inner{ flex-direction:column; text-align:center; }
+  .profile-facts{ margin-inline-start:0; width:100%; text-align:start; }
   .newsletter-form{ flex-direction:column; }
   .dash-hero-inner{ flex-direction:column; text-align:center; }
 
