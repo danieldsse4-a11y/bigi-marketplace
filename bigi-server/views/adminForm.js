@@ -14,8 +14,21 @@ function photoRow(n, removable) {
     </div>`;
 }
 
+// When the form comes back with an error, the packages and link buttons the
+// admin already typed are put back (they arrive as JSON text).
+function listFrom(raw) {
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
 function createFormPage({ adminEmail, error, values = {} } = {}) {
   const v = (k) => escapeHtml(values[k] || '');
+  // editNote:false drops the sentence about the supplier's own edit page: a profile created here has no supplier account.
+  const initialExtras = { packages: listFrom(values.packages), socialLinks: listFrom(values.socialLinks), editNote: false };
   const option = (value, label, selected) =>
     `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 
@@ -63,15 +76,19 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           <textarea id="description" name="description" placeholder="כמה מילים על הספק ועל השירות שהוא מציע...">${v('description')}</textarea>
         </div>
 
-        <div class="form-row">
-          <div class="form-field">
-            <label for="contactEmail">מייל ליצירת קשר</label>
-            <input id="contactEmail" name="contactEmail" type="email" value="${v('contactEmail')}" placeholder="contact@business.co.il">
-          </div>
-          <div class="form-field">
-            <label for="links">קישורים (אתר / אינסטגרם וכו')</label>
-            <input id="links" name="links" type="text" value="${v('links')}" placeholder="https://...">
-          </div>
+        <div class="form-field">
+          <label for="contactEmail">מייל ליצירת קשר</label>
+          <input id="contactEmail" name="contactEmail" type="email" value="${v('contactEmail')}" placeholder="contact@business.co.il">
+        </div>
+
+        <div class="form-field" id="extras-editor" data-initial="${escapeHtml(JSON.stringify(initialExtras))}"></div>
+        <input type="hidden" name="packages" id="packages-json">
+        <input type="hidden" name="socialLinks" id="social-links-json">
+
+        <div class="form-field">
+          <label for="logo-input">לוגו העסק (לא חובה)</label>
+          <input type="file" id="logo-input" name="logo" accept="image/png,image/jpeg,image/webp">
+          <div class="field-hint">JPG / PNG / WebP, עד 2MB. יופיע ליד שם העסק בראש הפרופיל.</div>
         </div>
 
         <div class="form-field">
@@ -87,7 +104,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           <label>סרטון (לא חובה)</label>
           <div class="field-hint" style="margin-bottom:12px;">אפשר להעלות MP4, WebM או MOV עד 45MB, או להדביק קישור מיוטיוב, אינסטגרם, טיקטוק או Vimeo.</div>
           <input type="file" id="video-input" name="video" accept="video/mp4,video/webm,video/quicktime">
-          <input id="video-link" name="videoLink" type="url" inputmode="url" value="${v('videoLink')}" placeholder="או הדביקו קישור לסרטון: https://youtube.com/..." style="margin-top:10px;">
+          <input id="video-link" name="videoLink" type="url" inputmode="url" value="${v('videoLink')}" placeholder="או הדביקו כאן קישור לסרטון" style="margin-top:10px;">
         </div>
 
         <div class="form-field">
@@ -102,6 +119,7 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
       </form>
     </div>
 
+    <script src="/extras-editor.js"></script>
     <script>
       (function(){
         var MAX_PRODUCT_IMAGES = ${MAX_PRODUCT_IMAGES};
@@ -142,10 +160,15 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           });
         }
         function enhanceAll(){
-          document.querySelectorAll('input[type=file]:not(#video-input)').forEach(function(input){ enhanceFileInput(input); });
+          document.querySelectorAll('input[type=file]:not(#video-input):not(#logo-input)').forEach(function(input){ enhanceFileInput(input); });
           enhanceFileInput(document.getElementById('video-input'), 'בחרו סרטון', 'לא נבחר סרטון');
+          enhanceFileInput(document.getElementById('logo-input'), 'בחרו לוגו', 'לא נבחר לוגו');
         }
         enhanceAll();
+
+        // Packages and link buttons: rows carry no names, so they are sent as two JSON fields.
+        var extrasRoot = document.getElementById('extras-editor');
+        var extras = window.mountExtrasEditor(extrasRoot, JSON.parse(extrasRoot.getAttribute('data-initial') || '{}'));
 
         var videoInput = document.getElementById('video-input');
         var videoLink = document.getElementById('video-link');
@@ -188,6 +211,9 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
         var form = document.getElementById('supplier-form');
         var btn = document.getElementById('submit-btn');
         form.addEventListener('submit', function(){
+          var collected = extras.collect();
+          document.getElementById('packages-json').value = JSON.stringify(collected.packages);
+          document.getElementById('social-links-json').value = JSON.stringify(collected.socialLinks);
           btn.textContent = 'שולח ומעלה מדיה...';
           btn.style.pointerEvents = 'none';
         });
