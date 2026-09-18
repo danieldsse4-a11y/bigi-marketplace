@@ -117,9 +117,10 @@ async function saveVideo(supplierId, file) {
   return supabase.storage.from(VIDEOS_BUCKET).getPublicUrl(objectPath).data.publicUrl;
 }
 
-// Removes one previously saved image, given the URL saveImage returned. It
-// only ever touches files inside a supplier's own folder, and never throws:
-// an old logo left behind must not turn a successful edit into an error.
+// Removes one previously saved image or video, given the URL saveImage /
+// saveVideo returned. It only ever touches files inside a supplier's own
+// folder, and never throws: an old file left behind must not turn a
+// successful edit into an error.
 async function deleteImageByUrl(url) {
   try {
     const text = String(url || '');
@@ -131,12 +132,13 @@ async function deleteImageByUrl(url) {
       fs.rmSync(file, { force: true });
       return true;
     }
-    const marker = `/${IMAGES_BUCKET}/suppliers/`;
+    const bucket = text.includes(`/${VIDEOS_BUCKET}/suppliers/`) ? VIDEOS_BUCKET : IMAGES_BUCKET;
+    const marker = `/${bucket}/suppliers/`;
     const at = text.indexOf(marker);
     if (at === -1) return false;
-    const objectPath = text.slice(at + IMAGES_BUCKET.length + 2).split('?')[0];
+    const objectPath = text.slice(at + bucket.length + 2).split('?')[0];
     if (!/^suppliers\/[\w-]+\/[\w.-]+$/.test(objectPath) || objectPath.includes('..')) return false;
-    const { error } = await supabase.storage.from(IMAGES_BUCKET).remove([objectPath]);
+    const { error } = await supabase.storage.from(bucket).remove([objectPath]);
     if (error) throw new Error(error.message);
     return true;
   } catch (err) {

@@ -141,6 +141,7 @@ function editView(s) {
   return {
     id: s.id,
     name: s.name,
+    category: s.category,
     categoryLabel: categoryById(s.category)?.name || s.category || '',
     city: s.city || '',
     description: s.description || '',
@@ -220,13 +221,15 @@ function publicVendors(db, { isAdmin }) {
     .sort((a, b) => String(a.publishedAt).localeCompare(String(b.publishedAt)))
     .map((s) => {
       const cat = categoryById(s.category);
+      // Real reviews, so the card, the star filter and the sort see them.
+      const stats = reviews.summarize(reviews.reviewsFor(db, s.id));
       return {
         id: s.id,
         name: s.name,
         cat: cat ? cat.id : null,
         city: s.city || '',
-        rating: null,
-        reviews: 0,
+        rating: stats.average,
+        reviews: stats.count,
         priceFrom: null,
         ...featuredFields(s.id, 'חדש'),
         tag: cat ? cat.name : (s.category || ''),
@@ -242,7 +245,13 @@ function publicVendors(db, { isAdmin }) {
 }
 
 function dataJs(db, { isAdmin }) {
-  const values = { ...SITE_DATA, VENDORS: publicVendors(db, { isAdmin }) };
+  const vendors = publicVendors(db, { isAdmin });
+  // "N ספקים" on the home page and in the filters is counted live, not the
+  // number that shipped in the data file.
+  const categories = SITE_DATA.CATEGORIES.map((c) => ({
+    ...c, count: vendors.filter((v) => !v.hidden && v.cat === c.id).length,
+  }));
+  const values = { ...SITE_DATA, CATEGORIES: categories, VENDORS: vendors };
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 

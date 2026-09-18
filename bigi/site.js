@@ -1049,7 +1049,57 @@
       if(btn){ btn.closest('.product-photo-row').remove(); updatePhotoCount(); }
     });
 
+    /* Name, category, city, background photo and video */
+    $('#ef-category').innerHTML = '<option value="">בחרו קטגוריה</option>' +
+      CATEGORIES.map(c => `<option value="${esc(c.id)}">${esc(c.icon)} ${esc(c.name)}</option>`).join('');
+    $('#ef-city').innerHTML = '<option value="">בחרו עיר (לא חובה)</option>' +
+      CITIES.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    const bgInput = $('#ef-background');
+    const videoInput = $('#ef-video');
+    const videoLinkInput = $('#ef-video-link');
+    const removeVideo = $('#ef-remove-video');
+    enhanceFileInput(bgInput, 'בחרו תמונת רקע חדשה', 'לא נבחרה תמונה');
+    enhanceFileInput(videoInput, 'בחרו סרטון', 'לא נבחר סרטון');
+    bgInput.addEventListener('change', () => {
+      const file = bgInput.files && bgInput.files[0];
+      if(file && file.size > 5 * 1024 * 1024){
+        errorBox.textContent = 'תמונת הרקע גדולה מדי — עד 5MB.';
+        errorBox.hidden = false;
+        bgInput.value = '';
+        bgInput.dispatchEvent(new Event('change'));
+      }
+    });
+    // A file or a link, not both — the same rule as the sign-up form.
+    videoInput.addEventListener('change', () => {
+      const file = videoInput.files && videoInput.files[0];
+      if(file && file.size > 45 * 1024 * 1024){
+        errorBox.textContent = 'הסרטון גדול מדי — עד 45MB.';
+        errorBox.hidden = false;
+        videoInput.value = '';
+        videoInput.dispatchEvent(new Event('change'));
+        return;
+      }
+      videoLinkInput.disabled = Boolean(file);
+      if(file){ videoLinkInput.value = ''; removeVideo.checked = false; }
+    });
+    videoLinkInput.addEventListener('input', () => {
+      videoInput.disabled = Boolean(videoLinkInput.value.trim());
+      if(videoLinkInput.value.trim()) removeVideo.checked = false;
+    });
+
     function fill(p){
+      $('#ef-name').value = p.name || '';
+      $('#ef-category').value = p.category || '';
+      $('#ef-city').value = p.city || '';
+      $('#edit-bg-img').src = p.backgroundImage || '';
+      bgInput.value = '';
+      videoInput.value = '';
+      videoInput.disabled = false;
+      videoLinkInput.disabled = false;
+      videoLinkInput.value = '';
+      removeVideo.checked = false;
+      $('#edit-video-current').hidden = !p.video;
+      if(p.video) $('#edit-video-text').textContent = p.video.kind === 'video' ? 'סרטון שהועלה לאתר' : p.video.url;
       phoneInput.value = p.phone || '';
       currentPhotos = Array.isArray(p.productImages) ? p.productImages : [];
       toRemove.clear();
@@ -1099,9 +1149,17 @@
       if(total > MAX_PRODUCT_IMAGES) return fail(`אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
 
       submitBtn.disabled = true;
-      submitBtn.textContent = added.length ? 'שומר ומעלה תמונות…' : 'שומר…';
+      const uploading = added.length || (bgInput.files && bgInput.files[0]) || (videoInput.files && videoInput.files[0]);
+      submitBtn.textContent = uploading ? 'שומר ומעלה קבצים…' : 'שומר…';
       const extras = editor.collect();
       const formData = new FormData();
+      formData.set('name', $('#ef-name').value.trim());
+      formData.set('category', $('#ef-category').value);
+      formData.set('city', $('#ef-city').value);
+      if(bgInput.files && bgInput.files[0]) formData.set('backgroundImage', bgInput.files[0]);
+      if(videoInput.files && videoInput.files[0]) formData.set('video', videoInput.files[0]);
+      formData.set('videoLink', videoLinkInput.value.trim());
+      if(removeVideo.checked) formData.set('removeVideo', '1');
       formData.set('phone', phoneInput.value.trim());
       formData.set('description', $('#ef-description').value);
       formData.set('contactEmail', $('#ef-email').value);

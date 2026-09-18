@@ -826,6 +826,8 @@ body.lb-open{ position:fixed; left:0; right:0; width:100%; overflow:hidden; }
 /* Edit-profile page: the current logo, and its "remove" tick */
 .logo-current{ display:flex; align-items:center; gap:14px; margin-bottom:10px; }
 
+.edit-bg-preview{ object-fit:cover; border-radius:10px; background:var(--bg-soft); }
+.edit-video-text{ font-size:13.5px; color:var(--ink-soft); overflow-wrap:anywhere; direction:ltr; unicode-bidi:isolate; }
 /* Edit page: the supplier's current photos, each with a ✕ to remove it */
 .edit-photo-count{ font-weight:600; color:var(--muted); font-size:13px; margin-inline-start:6px; }
 .edit-photo-count.is-low{ color:#B8323C; font-weight:800; }

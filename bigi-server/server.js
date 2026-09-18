@@ -363,7 +363,8 @@ app.put(
 // another.
 function imageInUse(data, url, exceptId) {
   return Object.values(data.suppliers).some((s) => s.id !== exceptId && (
-    s.backgroundImage === url || s.logo === url || (s.productImages || []).some((p) => p.file === url)
+    s.backgroundImage === url || s.logo === url || (s.video && s.video.url === url)
+    || (s.productImages || []).some((p) => p.file === url)
   ));
 }
 
@@ -383,9 +384,17 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
 
   const uploaded = [];
   let newLogo = null;
+  let newBackground = null;
+  let newVideo = null;
   const added = [];
   try {
     if (form.logoFile) { newLogo = await storage.saveImage(id, form.logoFile); uploaded.push(newLogo); }
+    if (form.backgroundFile) { newBackground = await storage.saveImage(id, form.backgroundFile); uploaded.push(newBackground); }
+    if (form.videoFile) {
+      const url = await storage.saveVideo(id, form.videoFile);
+      uploaded.push(url);
+      newVideo = { kind: 'video', url };
+    }
     for (const [i, file] of form.productFiles.entries()) {
       const url = await storage.saveImage(id, file);
       uploaded.push(url);
@@ -397,6 +406,12 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
     return res.status(500).json({ error: 'העלאת התמונות נכשלה. נסו שוב.' });
   }
 
+  // undefined = leave the video as it is; null = remove it.
+  let nextVideo;
+  if (newVideo) nextVideo = newVideo;
+  else if (checked.video) nextVideo = checked.video;
+  else if (checked.removeVideo) nextVideo = null;
+
   let replacedLogo = null;
   let removed = [];
   let problem = null;
@@ -407,9 +422,19 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
     const now = supplierForm.photoPlan(s.productImages, checked.removePhotos, added.length);
     if (now.error) { problem = now.error; return false; }
     if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
+    const oldFiles = [];
+    if (newBackground) { oldFiles.push(s.backgroundImage); s.backgroundImage = newBackground; }
+    if (nextVideo !== undefined) {
+      // Only an uploaded file has anything to delete; a link is just text.
+      if (s.video && s.video.kind === 'video' && s.video.url !== (nextVideo && nextVideo.url)) oldFiles.push(s.video.url);
+      s.video = nextVideo;
+    }
     s.productImages = [...now.keep, ...added];
-    removed = now.removed.map((p) => p.file)
-      .filter((url) => url !== s.backgroundImage && url !== s.logo && !imageInUse(data, url, id));
+    removed = [...now.removed.map((p) => p.file), ...oldFiles]
+      .filter((url) => url && url !== s.backgroundImage && url !== s.logo && !imageInUse(data, url, id));
+    if (checked.name !== null) s.name = checked.name;
+    if (checked.category !== null) s.category = checked.category;
+    if (checked.city !== null) s.city = checked.city;
     s.description = checked.description;
     s.contactEmail = checked.contactEmail;
     if (checked.phone !== null) s.phone = checked.phone;

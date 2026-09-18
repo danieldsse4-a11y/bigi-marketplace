@@ -22,18 +22,20 @@ const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
+function fileFilter(req, file, cb) {
+  const allowed = file.fieldname === 'video' ? VIDEO_MIME : IMAGE_MIME;
+  if (!allowed.has(file.mimetype)) {
+    return cb(new Error(file.fieldname === 'video'
+      ? 'סוג הסרטון לא נתמך — רק MP4, WebM או MOV.'
+      : 'סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
+  }
+  cb(null, true);
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 },
-  fileFilter(req, file, cb) {
-    const allowed = file.fieldname === 'video' ? VIDEO_MIME : IMAGE_MIME;
-    if (!allowed.has(file.mimetype)) {
-      return cb(new Error(file.fieldname === 'video'
-        ? 'סוג הסרטון לא נתמך — רק MP4, WebM או MOV.'
-        : 'סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
-    }
-    cb(null, true);
-  },
+  fileFilter,
 }).fields([
   { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
   { name: 'backgroundImage', maxCount: 1 },
@@ -56,29 +58,24 @@ function parseForm(onError) {
   };
 }
 
-// Editing takes a new logo and new work photos — images only, 5MB each while
-// they stream in (the logo's own 2MB limit is checked in checkEdit).
+// Editing takes the same files as sign-up: photos, a background, a logo and a
+// video. The per-kind size limits are checked in checkEdit.
 const editUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMAGE_BYTES, files: MAX_PRODUCT_IMAGES + 1 },
-  fileFilter(req, file, cb) {
-    if (!['logo', 'productImages'].includes(file.fieldname) || !IMAGE_MIME.has(file.mimetype)) {
-      return cb(new Error('סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
-    }
-    cb(null, true);
-  },
-}).fields([{ name: 'logo', maxCount: 1 }, { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES }]);
+  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 },
+  fileFilter,
+}).fields([
+  { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
+  { name: 'backgroundImage', maxCount: 1 },
+  { name: 'logo', maxCount: 1 },
+  { name: 'video', maxCount: 1 },
+]);
 
 function parseEditForm(onError) {
   const tooBig = `סך כל הקבצים בשליחה אחת גדול מדי (עד ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB). העלו פחות תמונות בכל פעם.`;
   return (req, res, next) => {
     if (Number(req.headers['content-length'] || 0) > MAX_UPLOAD_BYTES) return onError(req, res, tooBig);
-    editUpload(req, res, (err) => {
-      if (!err) return next();
-      if (err.code === 'LIMIT_FILE_SIZE') return onError(req, res, 'אחת התמונות גדולה מדי — עד 5MB לתמונה.');
-      if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return onError(req, res, `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות.`);
-      onError(req, res, err.message);
-    });
+    editUpload(req, res, (err) => (err ? onError(req, res, uploadErrorMessage(err)) : next()));
   };
 }
 
@@ -120,17 +117,25 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // The parts of a profile a supplier can change after it exists.
 function readEditForm(req) {
   const text = (key) => String(req.body?.[key] || '').trim();
+  // null when the field wasn't sent at all (an older copy of the page): that
+  // value is then left as it is.
+  const sent = (key) => (req.body?.[key] === undefined ? null : text(key));
   const captionsRaw = req.body?.productCaptions;
   return {
+    name: sent('name'),
+    category: sent('category'),
+    city: sent('city'),
     description: text('description'),
     contactEmail: text('contactEmail'),
-    // null when the field wasn't sent at all (an older copy of the page):
-    // the phone is then left as it is.
-    phone: req.body?.phone === undefined ? null : text('phone'),
+    phone: sent('phone'),
     packages: text('packages'),
     socialLinks: text('socialLinks'),
     removeLogo: text('removeLogo') === '1',
     logoFile: req.files?.logo?.[0],
+    backgroundFile: req.files?.backgroundImage?.[0],
+    videoFile: req.files?.video?.[0],
+    videoLink: text('videoLink'),
+    removeVideo: text('removeVideo') === '1',
     // New photos, each with its caption, and the addresses of photos to remove.
     productFiles: req.files?.productImages || [],
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
@@ -141,6 +146,10 @@ function readEditForm(req) {
 // Returns { error } or the cleaned values ready to store. The photo count is
 // checked where the profile's current photos are known (see photoPlan).
 function checkEdit(form, { requirePhone = false } = {}) {
+  if (form.name !== null && !form.name) return { error: 'שם העסק הוא שדה חובה.' };
+  if (form.name !== null && form.name.length > 80) return { error: 'שם העסק ארוך מדי.' };
+  if (form.category !== null && !categoryById(form.category)) return { error: 'נא לבחור קטגוריה מהרשימה.' };
+  if (form.city && !CITIES.includes(form.city)) return { error: 'נא לבחור עיר מהרשימה.' };
   if (form.description.length > 2000) return { error: 'התיאור ארוך מדי (עד 2000 תווים).' };
   if (form.contactEmail && (form.contactEmail.length > 120 || !EMAIL_RE.test(form.contactEmail))) {
     return { error: 'כתובת המייל אינה תקינה.' };
@@ -148,6 +157,11 @@ function checkEdit(form, { requirePhone = false } = {}) {
   const phoneProblem = form.phone === null ? null : phoneError(form.phone, { required: requirePhone });
   if (phoneProblem) return { error: phoneProblem };
   if (form.logoFile && form.logoFile.size > MAX_LOGO_BYTES) return { error: 'הלוגו גדול מדי — עד 2MB.' };
+  if (form.backgroundFile && form.backgroundFile.size > MAX_IMAGE_BYTES) return { error: 'תמונת הרקע גדולה מדי — עד 5MB.' };
+  if (form.productFiles.some((file) => file.size > MAX_IMAGE_BYTES)) return { error: 'אחת התמונות גדולה מדי — עד 5MB לתמונה.' };
+  if (form.videoFile && form.videoLink) return { error: 'יש לבחור סרטון להעלאה או להדביק קישור — לא את שניהם.' };
+  const video = normalizeVideoLink(form.videoLink);
+  if (video?.error) return { error: video.error };
 
   const captions = form.captions.map((c) => String(c ?? '').trim());
   if (captions.length !== form.productFiles.length) return { error: 'לכל תמונה חדשה צריך תיאור.' };
@@ -161,9 +175,12 @@ function checkEdit(form, { requirePhone = false } = {}) {
   const extras = parseExtras(form);
   if (extras.error) return { error: extras.error };
   return {
+    name: form.name, category: form.category, city: form.city,
     description: form.description, contactEmail: form.contactEmail, phone: form.phone,
     packages: extras.packages, socialLinks: extras.socialLinks,
     captions, removePhotos: new Set(removals.value),
+    // A pasted link, already in the shape the profile stores; null when none.
+    video, removeVideo: form.removeVideo,
   };
 }
 
