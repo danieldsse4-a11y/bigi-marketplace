@@ -8,23 +8,32 @@ const { categoryById, CITIES } = require('./siteData');
 
 const MIN_PRODUCT_IMAGES = 5;
 const MAX_PRODUCT_IMAGES = 10;
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 45 * 1024 * 1024;
+const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: MAX_PRODUCT_IMAGES + 1 },
+  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 2 },
   fileFilter(req, file, cb) {
-    if (!ALLOWED_MIME.has(file.mimetype)) return cb(new Error('סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
+    const allowed = file.fieldname === 'video' ? VIDEO_MIME : IMAGE_MIME;
+    if (!allowed.has(file.mimetype)) {
+      return cb(new Error(file.fieldname === 'video'
+        ? 'סוג הסרטון לא נתמך — רק MP4, WebM או MOV.'
+        : 'סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
+    }
     cb(null, true);
   },
 }).fields([
   { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
   { name: 'backgroundImage', maxCount: 1 },
+  { name: 'video', maxCount: 1 },
 ]);
 
 function uploadErrorMessage(err) {
-  if (err.code === 'LIMIT_FILE_SIZE') return 'אחת התמונות גדולה מדי — עד 5MB לתמונה.';
-  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר ותמונת רקע אחת.`;
+  if (err.code === 'LIMIT_FILE_SIZE') return 'הקובץ גדול מדי — סרטון עד 45MB ותמונה עד 5MB.';
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר, תמונת רקע וסרטון אחד.`;
   return err.message;
 }
 
@@ -44,10 +53,38 @@ function readForm(req) {
     phone: text('phone'),
     contactEmail: text('contactEmail'),
     links: text('links'),
+    videoLink: text('videoLink'),
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     productFiles: req.files?.productImages || [],
     backgroundFile: req.files?.backgroundImage?.[0],
+    videoFile: req.files?.video?.[0],
   };
+}
+
+function normalizeVideoLink(raw) {
+  if (!raw) return null;
+  if (raw.length > 500) return { error: 'הקישור לסרטון ארוך מדי.' };
+  let url;
+  try { url = new URL(raw); } catch { return { error: 'הקישור לסרטון אינו תקין.' }; }
+  if (!['http:', 'https:'].includes(url.protocol)) return { error: 'הקישור לסרטון חייב להתחיל ב־http או https.' };
+
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  let youtubeId = null;
+  if (host === 'youtu.be') youtubeId = url.pathname.split('/').filter(Boolean)[0];
+  if (host === 'youtube.com' || host === 'm.youtube.com') {
+    if (url.pathname === '/watch') youtubeId = url.searchParams.get('v');
+    else if (url.pathname.startsWith('/shorts/') || url.pathname.startsWith('/embed/')) youtubeId = url.pathname.split('/')[2];
+  }
+  if (youtubeId && /^[\w-]{6,20}$/.test(youtubeId)) {
+    return { kind: 'embed', url: url.href, embed: `https://www.youtube-nocookie.com/embed/${youtubeId}` };
+  }
+
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    const vimeoId = url.pathname.split('/').filter(Boolean).find((part) => /^\d+$/.test(part));
+    if (vimeoId) return { kind: 'embed', url: url.href, embed: `https://player.vimeo.com/video/${vimeoId}` };
+  }
+
+  return { kind: 'link', url: url.href };
 }
 
 // Returns an error message for the form, or null when it's valid.
@@ -61,6 +98,11 @@ function validateForm(form) {
     return `יש להעלות לפחות ${MIN_PRODUCT_IMAGES} תמונות מוצר (הועלו ${form.productFiles.length}).`;
   }
   if (!form.backgroundFile) return 'יש להעלות תמונת רקע לפרופיל.';
+  const oversizedImage = [...form.productFiles, form.backgroundFile].find((file) => file && file.size > MAX_IMAGE_BYTES);
+  if (oversizedImage) return 'אחת התמונות גדולה מדי — עד 5MB לתמונה.';
+  if (form.videoFile && form.videoLink) return 'יש לבחור סרטון להעלאה או להדביק קישור — לא את שניהם.';
+  const normalizedLink = normalizeVideoLink(form.videoLink);
+  if (normalizedLink?.error) return normalizedLink.error;
   return null;
 }
 
@@ -75,6 +117,9 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
       caption: String(form.captions[i] || '').trim().slice(0, 200) || 'ללא תיאור',
     });
   }
+  const video = form.videoFile
+    ? { kind: 'video', url: await storage.saveVideo(id, form.videoFile) }
+    : normalizeVideoLink(form.videoLink);
   return {
     id,
     name: form.name,
@@ -86,6 +131,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
     links: form.links,
     backgroundImage,
     productImages,
+    video,
     isPublic: false,
     unlisted: true,
     source,
@@ -95,4 +141,4 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
   };
 }
 
-module.exports = { MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, parseForm, readForm, validateForm, buildSupplier };
+module.exports = { MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink };

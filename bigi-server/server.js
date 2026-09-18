@@ -435,7 +435,7 @@ app.post(
 );
 
 // Deleting is permanent: the profile leaves the database and its uploaded
-// photos are removed. Sample suppliers ship with the site, so they can only be
+// uploaded media are removed. Sample suppliers ship with the site, so they can only be
 // switched to demo — never deleted.
 app.post(
   '/admin-suppliers/profiles/:key/delete',
@@ -449,9 +449,9 @@ app.post(
     if (!deleted) {
       return res.status(404).json({ error: 'הפרופיל לא נמצא. ספקים לדוגמה אפשר להחזיר לדמו, אבל לא למחוק.' });
     }
-    const photos = await storage.deleteSupplierImages(deleted.id);
-    console.log(`Admin ${req.adminEmail} deleted the profile "${deleted.name}" (${deleted.id}) and ${photos} photo(s)`);
-    res.json({ key: req.params.key, name: deleted.name, photos });
+    const mediaFiles = await storage.deleteSupplierImages(deleted.id);
+    console.log(`Admin ${req.adminEmail} deleted the profile "${deleted.name}" (${deleted.id}) and ${mediaFiles} media file(s)`);
+    res.json({ key: req.params.key, name: deleted.name, mediaFiles });
   }
 );
 
@@ -473,8 +473,8 @@ app.post(
     try {
       supplier = await supplierForm.buildSupplier(form, { createdBy: req.adminEmail, source: 'admin' });
     } catch (err) {
-      console.error('Image upload failed:', err);
-      return rerender('העלאת התמונות נכשלה. נסו שוב.');
+      console.error('Media upload failed:', err);
+      return rerender('העלאת התמונות או הסרטון נכשלה. נסו שוב.');
     }
     await db.withDb((data) => {
       data.suppliers[supplier.id] = supplier;

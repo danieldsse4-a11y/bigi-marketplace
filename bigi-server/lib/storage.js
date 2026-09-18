@@ -13,6 +13,7 @@ const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 
 const DATA_BUCKET = 'bigi-data';          // private — sessions and admin data live here
 const IMAGES_BUCKET = 'supplier-images';  // public — photos are shown on profile pages
+const VIDEOS_BUCKET = 'supplier-videos';  // public — optional supplier videos
 const DB_OBJECT = 'db.json';
 
 const LOCAL_DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
@@ -34,6 +35,7 @@ async function ensureBuckets() {
   const wanted = [
     [DATA_BUCKET, { public: false }],
     [IMAGES_BUCKET, { public: true, fileSizeLimit: '5MB', allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] }],
+    [VIDEOS_BUCKET, { public: true, fileSizeLimit: '45MB', allowedMimeTypes: ['video/mp4', 'video/webm', 'video/quicktime'] }],
   ];
   for (const [name, options] of wanted) {
     if (existing.has(name)) continue;
@@ -72,6 +74,7 @@ async function writeDb(json) {
 }
 
 const EXT_BY_MIME = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
+const VIDEO_EXT_BY_MIME = { 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov' };
 
 // Saves one uploaded photo and returns the URL to show it with.
 async function saveImage(supplierId, file) {
@@ -94,6 +97,26 @@ async function saveImage(supplierId, file) {
   return supabase.storage.from(IMAGES_BUCKET).getPublicUrl(objectPath).data.publicUrl;
 }
 
+async function saveVideo(supplierId, file) {
+  const name = crypto.randomBytes(8).toString('hex') + (VIDEO_EXT_BY_MIME[file.mimetype] || '.mp4');
+
+  if (!USE_SUPABASE) {
+    const dir = path.join(LOCAL_UPLOADS_DIR, 'suppliers', supplierId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, name), file.buffer);
+    return `/uploads/suppliers/${supplierId}/${name}`;
+  }
+
+  const objectPath = `suppliers/${supplierId}/${name}`;
+  const { error } = await supabase.storage.from(VIDEOS_BUCKET).upload(objectPath, file.buffer, {
+    contentType: file.mimetype,
+    upsert: false,
+    cacheControl: '31536000',
+  });
+  if (error) throw new Error(`Supabase video upload failed: ${error.message}`);
+  return supabase.storage.from(VIDEOS_BUCKET).getPublicUrl(objectPath).data.publicUrl;
+}
+
 // Removes every photo belonging to one supplier. Returns how many were
 // deleted. Never throws: the profile is already gone from the database by the
 // time this runs, and leftover files must not turn that into an error.
@@ -107,14 +130,16 @@ async function deleteSupplierImages(supplierId) {
       return count;
     }
     const prefix = `suppliers/${supplierId}`;
-    const { data, error } = await supabase.storage.from(IMAGES_BUCKET).list(prefix, { limit: 100 });
-    if (error) throw new Error(error.message);
-    if (!data.length) return 0;
-    const { error: removeError } = await supabase.storage
-      .from(IMAGES_BUCKET)
-      .remove(data.map((f) => `${prefix}/${f.name}`));
-    if (removeError) throw new Error(removeError.message);
-    return data.length;
+    let removed = 0;
+    for (const bucket of [IMAGES_BUCKET, VIDEOS_BUCKET]) {
+      const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 100 });
+      if (error) throw new Error(error.message);
+      if (!data.length) continue;
+      const { error: removeError } = await supabase.storage.from(bucket).remove(data.map((f) => `${prefix}/${f.name}`));
+      if (removeError) throw new Error(removeError.message);
+      removed += data.length;
+    }
+    return removed;
   } catch (err) {
     console.error(`Could not delete photos for supplier ${supplierId}:`, err.message);
     return 0;
@@ -128,5 +153,6 @@ module.exports = {
   readDb,
   writeDb,
   saveImage,
+  saveVideo,
   deleteSupplierImages,
 };

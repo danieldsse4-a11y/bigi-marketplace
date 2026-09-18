@@ -816,8 +816,8 @@
      English and reads left-to-right. The input stays in the page (so the
      browser can still focus it when the form is invalid) but is made
      transparent and stretched over a Hebrew label. */
-  function enhanceFileInput(input){
-    if(input.dataset.enhanced) return;
+  function enhanceFileInput(input, buttonText, emptyText){
+    if(!input || input.dataset.enhanced) return;
     input.dataset.enhanced = '1';
     const drop = document.createElement('label');
     drop.className = 'file-drop';
@@ -825,10 +825,10 @@
     drop.appendChild(input);
     const button = document.createElement('span');
     button.className = 'file-drop-btn';
-    button.textContent = 'בחרו תמונה';
+    button.textContent = buttonText || 'בחרו תמונה';
     const fileName = document.createElement('span');
     fileName.className = 'file-drop-name';
-    const empty = 'לא נבחרה תמונה';
+    const empty = emptyText || 'לא נבחרה תמונה';
     fileName.textContent = empty;
     drop.append(button, fileName);
     input.addEventListener('change', () => {
@@ -882,6 +882,21 @@
     }
     for(let i = 0; i < MIN_PRODUCT_IMAGES; i++) addRow(false);
     enhanceFileInput($('#sf-background'));
+    enhanceFileInput($('#sf-video'), 'בחרו סרטון', 'לא נבחר סרטון');
+
+    const videoInput = $('#sf-video');
+    const videoLink = $('#sf-video-link');
+    if(videoInput && videoLink){
+      videoInput.addEventListener('change', () => {
+        const picked = videoInput.files && videoInput.files.length > 0;
+        videoLink.disabled = picked;
+        videoLink.placeholder = picked ? 'הועלה קובץ — הקישור לא נדרש' : 'או הדביקו קישור לסרטון: https://youtube.com/...';
+        if(picked) videoLink.value = '';
+      });
+      videoLink.addEventListener('input', () => {
+        videoInput.disabled = Boolean(videoLink.value.trim());
+      });
+    }
     addBtn.addEventListener('click', () => { if($$('.product-photo-row', rows).length < MAX_PRODUCT_IMAGES) addRow(true); });
     rows.addEventListener('click', (e) => {
       const btn = e.target.closest('.remove-row-btn');
@@ -944,11 +959,24 @@
       ];
       $('#dash-details').innerHTML = details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="muted">לא הוזן</span>'}</dd></div>`).join('');
 
-      $('#dash-photos').innerHTML = p.productImages.map(img => `
-        <figure class="dash-photo">
+      const videoTile = !p.video ? '' : p.video.kind === 'link'
+        ? `<a class="dash-photo media-tile" href="${esc(p.video.url)}" target="_blank" rel="noopener"
+             style="background-image:url('${esc(p.backgroundImage || '')}'); background-size:cover; background-position:center;">
+             <span class="media-tile-label">סרטון</span>
+           </a>`
+        : `<figure class="dash-photo media-tile"
+             style="background-image:url('${esc(p.backgroundImage || '')}'); background-size:cover; background-position:center;"
+             data-lb-type="${p.video.embed ? 'embed' : 'video'}" data-lb-src="${esc(p.video.embed || p.video.url)}"
+             data-lb-poster="${esc(p.backgroundImage || '')}" data-lb-caption="${esc(p.name)}">
+             <span class="media-tile-label">סרטון</span>
+           </figure>`;
+
+      $('#dash-photos').innerHTML = videoTile + p.productImages.map(img => `
+        <figure class="dash-photo" data-lb-type="image" data-lb-src="${esc(img.file)}" data-lb-caption="${esc(img.caption)}">
           <img src="${esc(img.file)}" alt="${esc(img.caption)}" loading="lazy">
           <figcaption>${esc(img.caption)}</figcaption>
         </figure>`).join('');
+      if(window.Lightbox) window.Lightbox.attach($('#dash-photos'));
     }
 
     Account.ready().then(async (user) => {
