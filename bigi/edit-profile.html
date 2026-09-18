@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6C5CE7">
+<title>עריכת הפרופיל — ביגי ספקים</title>
+<meta name="description" content="עריכת הפרופיל שלכם בביגי ספקים — חבילות, מחירים, קישורים ולוגו.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a href="index.html" class="logo">ביגי ספקים<span class="dot">.</span></a>
+    <nav class="main-nav">
+      <a href="index.html">בית</a>
+      <a href="vendors.html">כל הספקים</a>
+      <a href="join.html">הצטרפות כספק</a>
+    </nav>
+    <div class="header-actions">
+      <a href="favorites.html" class="nav-fav-link" aria-label="המועדפים שלי">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.6-4.6-10.2-9.6C.2 7.2 2.4 3.2 6.6 3.2c2.1 0 3.7 1.1 5.4 3 1.7-1.9 3.3-3 5.4-3 4.2 0 6.4 4 4.8 8.2C19.6 16.4 12 21 12 21z" stroke-linejoin="round"/></svg>
+        <span class="nav-fav-count" hidden>0</span>
+      </a>
+      <a href="/admin-suppliers" class="nav-text-link" data-admin-only hidden>🔐 ניהול ספקים</a>
+      <a href="login.html" class="btn btn-primary btn-sm" data-auth-guest>התחברות</a>
+      <div class="account-menu" data-auth-user hidden>
+        <button type="button" class="account-btn" aria-haspopup="menu" aria-expanded="false">
+          <span class="account-avatar" aria-hidden="true"></span>
+          <span class="account-name"></span>
+          <svg class="account-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="account-dropdown" role="menu" hidden>
+          <div class="account-dropdown-head">
+            <strong class="account-name"></strong>
+            <span class="account-email"></span>
+          </div>
+          <a href="dashboard.html" role="menuitem" data-role-supplier hidden>📊 לוח בקרה</a>
+          <a href="favorites.html" role="menuitem">❤️ המועדפים שלי</a>
+          <a href="/admin-suppliers" role="menuitem" data-admin-only hidden>🔐 ניהול ספקים</a>
+          <button type="button" role="menuitem" data-admin-confirm hidden>🔐 שליחת קישור לאישור הרשאות מנהל</button>
+          <button type="button" role="menuitem" class="account-logout" data-logout>יציאה מהחשבון</button>
+        </div>
+      </div>
+      <button class="nav-toggle" aria-label="תפריט"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<section class="join-hero">
+  <div class="wrap">
+    <h1>עריכת הפרופיל</h1>
+    <p>עדכנו את התיאור, החבילות והמחירים, הקישורים והלוגו. השינויים מופיעים באתר מיד ואין צורך באישור מחדש.</p>
+  </div>
+</section>
+
+<div class="join-form-wrap">
+  <div class="join-form-card">
+
+    <div class="join-state" id="edit-loading"><p class="join-state-text">טוען…</p></div>
+
+    <div class="join-state" id="edit-guest" hidden>
+      <div class="icon">🔒</div>
+      <h2>האזור הזה מיועד לספקים מחוברים</h2>
+      <p class="join-state-text">התחברו לחשבון הספק שלכם כדי לערוך את הפרופיל.</p>
+      <div class="join-state-actions">
+        <a href="login.html?next=edit-profile.html" class="btn btn-primary">התחברות</a>
+      </div>
+    </div>
+
+    <div class="join-state" id="edit-customer" hidden>
+      <div class="icon">🙂</div>
+      <h2>החשבון שלכם הוא חשבון לקוח</h2>
+      <p class="join-state-text">עריכת פרופיל זמינה לחשבונות ספקים בלבד.</p>
+      <div class="join-state-actions">
+        <a href="vendors.html" class="btn btn-secondary">לכל הספקים</a>
+      </div>
+    </div>
+
+    <div class="join-state" id="edit-no-profile" hidden>
+      <div class="icon">📝</div>
+      <h2>עוד לא שלחתם פרופיל</h2>
+      <p class="join-state-text">קודם צריך למלא את פרטי העסק והתמונות.</p>
+      <div class="join-state-actions">
+        <a href="join.html" class="btn btn-primary">מילוי פרטי העסק</a>
+      </div>
+    </div>
+
+    <div class="join-state" id="edit-done" hidden>
+      <div class="icon">✅</div>
+      <h2>השינויים נשמרו</h2>
+      <p class="join-state-text">הפרופיל המעודכן כבר מופיע באתר.</p>
+      <div class="join-state-actions">
+        <a href="#" class="btn btn-primary" id="edit-view-link" target="_blank" rel="noopener">צפייה בפרופיל ↗</a>
+        <a href="dashboard.html" class="btn btn-secondary">ללוח הבקרה</a>
+        <button type="button" class="btn btn-ghost" id="edit-again">המשך עריכה</button>
+      </div>
+    </div>
+
+    <form id="edit-form" hidden>
+      <h2>עריכת פרטי הפרופיל</h2>
+      <p>שם העסק, הקטגוריה, התמונות והסרטון לא ניתנים לעריכה כאן כרגע.</p>
+
+      <div class="form-alert" id="edit-form-error" role="alert" hidden></div>
+
+      <div class="form-field">
+        <label for="ef-description">תיאור העסק</label>
+        <textarea id="ef-description" maxlength="2000" placeholder="ספרו ללקוחות למה כדאי לבחור בכם..."></textarea>
+      </div>
+
+      <div class="form-field">
+        <label for="ef-email">מייל ליצירת קשר</label>
+        <input id="ef-email" type="email" maxlength="120" autocomplete="email" placeholder="contact@business.co.il">
+      </div>
+
+      <div class="form-field" id="edit-extras"></div>
+
+      <div class="form-field">
+        <label for="ef-logo">לוגו העסק</label>
+        <div class="logo-current" id="edit-logo-current" hidden>
+          <img id="edit-logo-img" alt="הלוגו הנוכחי" width="64" height="64">
+          <label class="check-row"><input type="checkbox" id="ef-remove-logo"> הסרת הלוגו</label>
+        </div>
+        <input type="file" id="ef-logo" accept="image/png,image/jpeg,image/webp">
+        <div class="field-hint">JPG / PNG / WebP, עד 2MB. בחירה בלוגו חדש מחליפה את הקודם.</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" id="edit-submit">שמירת השינויים</button>
+    </form>
+
+  </div>
+</div>
+
+<footer class="site-footer" style="padding-top:32px;">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 ביגי ספקים. כל הזכויות שמורות.</span>
+      <span>תנאי שימוש · פרטיות</span>
+    </div>
+  </div>
+</footer>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

@@ -94,6 +94,7 @@ const loginLimiter = limiter(15, 10, 'יותר מדי ניסיונות התחב�
 const signupLimiter = limiter(60, 10, 'יותר מדי הרשמות מהמכשיר הזה. נסו שוב מאוחר יותר.');
 const adminVerifyLimiter = limiter(60, 5, 'יותר מדי בקשות לקישור אישור. נסו שוב מאוחר יותר.');
 const supplierSubmitLimiter = limiter(60, 10, 'יותר מדי ניסיונות שליחה. נסו שוב מאוחר יותר.');
+const supplierEditLimiter = limiter(60, 40, 'יותר מדי שמירות. נסו שוב מאוחר יותר.');
 const createLimiter = limiter(60, 20, 'יותר מדי בקשות ליצירת פרופיל. נסו שוב מאוחר יותר.');
 const visibilityLimiter = limiter(15, 150, 'יותר מדי שינויים. נסו שוב בעוד כמה דקות.');
 const deleteLimiter = limiter(15, 30, 'יותר מדי מחיקות. נסו שוב בעוד כמה דקות.');
@@ -324,6 +325,51 @@ app.post(
 
     await notifyAdminsOfNewProfile(supplier, `ספק חדש נרשם ושלח פרופיל (${req.user.name}, ${req.user.email}):`);
     res.status(201).json({ profile: catalog.ownProfile(db.load(), req.user.id) });
+  }
+);
+
+// A supplier edits their own profile only. Edits apply at once and never touch
+// whether the profile is live: a published profile stays published.
+app.put(
+  '/api/supplier/profile',
+  requireSameOrigin,
+  requireDb,
+  auth.requireUser,
+  supplierEditLimiter,
+  (req, res, next) => {
+    if (req.user.role !== 'supplier') return res.status(403).json({ error: 'רק חשבון ספק יכול לערוך פרופיל.' });
+    if (!catalog.ownProfile(db.load(), req.user.id)) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
+    next();
+  },
+  supplierForm.parseEditForm((req, res, message) => res.status(400).json({ error: message })),
+  async (req, res) => {
+    const form = supplierForm.readEditForm(req);
+    const checked = supplierForm.checkEdit(form);
+    if (checked.error) return res.status(400).json({ error: checked.error });
+
+    const own = () => Object.values(db.load().suppliers).find((s) => s.ownerUserId === req.user.id);
+    const target = own();
+    if (!target) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
+
+    const newLogo = form.logoFile ? await storage.saveImage(target.id, form.logoFile) : null;
+    let replacedLogo = null;
+    const saved = await db.withDb((data) => {
+      const s = data.suppliers[target.id];
+      if (!s || s.ownerUserId !== req.user.id) return false;
+      if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
+      s.description = checked.description;
+      s.contactEmail = checked.contactEmail;
+      s.packages = checked.packages;
+      s.socialLinks = checked.socialLinks;
+      s.links = '';
+      s.updatedAt = new Date().toISOString();
+      return true;
+    });
+    if (!saved) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+
+    // Only once the new logo is safely stored does the old file go.
+    if (replacedLogo && replacedLogo !== newLogo) await storage.deleteImageByUrl(replacedLogo);
+    res.json({ profile: catalog.ownProfile(db.load(), req.user.id) });
   }
 );
 

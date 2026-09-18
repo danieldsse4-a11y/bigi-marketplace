@@ -1043,6 +1043,84 @@
     });
   }
 
+  /* ---------- Edit profile: description, contact email, packages, link buttons, logo ---------- */
+  const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+  function initEditProfile(){
+    const form = $('#edit-form');
+    if(!form) return;
+
+    const states = ['edit-loading', 'edit-guest', 'edit-customer', 'edit-no-profile', 'edit-done'];
+    const show = (id) => {
+      states.forEach(s => $('#' + s).hidden = s !== id);
+      form.hidden = id !== 'form';
+    };
+    const errorBox = $('#edit-form-error');
+    const submitBtn = $('#edit-submit');
+    const removeLogo = $('#ef-remove-logo');
+    const logoInput = $('#ef-logo');
+    let editor = null;
+
+    enhanceFileInput(logoInput, 'בחרו לוגו חדש', 'לא נבחר לוגו');
+
+    function fill(p){
+      $('#ef-description').value = p.description || '';
+      $('#ef-email').value = p.contactEmail || '';
+      editor = mountExtrasEditor($('#edit-extras'), { packages: p.packages, socialLinks: p.socialLinks });
+      $('#edit-logo-current').hidden = !p.logo;
+      if(p.logo) $('#edit-logo-img').src = p.logo;
+      removeLogo.checked = false;
+      $('#edit-view-link').href = p.viewUrl;
+    }
+
+    logoInput.addEventListener('change', () => {
+      const file = logoInput.files && logoInput.files[0];
+      if(file && file.size > MAX_LOGO_BYTES){
+        errorBox.textContent = 'הלוגו גדול מדי — עד 2MB.';
+        errorBox.hidden = false;
+        logoInput.value = '';
+        logoInput.dispatchEvent(new Event('change'));
+        return;
+      }
+      if(file) removeLogo.checked = false;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שומר…';
+      const extras = editor.collect();
+      const formData = new FormData();
+      formData.set('description', $('#ef-description').value);
+      formData.set('contactEmail', $('#ef-email').value);
+      formData.set('packages', JSON.stringify(extras.packages));
+      formData.set('socialLinks', JSON.stringify(extras.socialLinks));
+      if(removeLogo.checked) formData.set('removeLogo', '1');
+      if(logoInput.files && logoInput.files[0]) formData.set('logo', logoInput.files[0]);
+      const { ok, status, data } = await api('/api/supplier/profile', { method: 'PUT', formData });
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'שמירת השינויים';
+      if(ok){ fill(data.profile); logoInput.value = ''; logoInput.dispatchEvent(new Event('change')); show('edit-done'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      if(status === 401){ location.href = 'login.html?next=edit-profile.html'; return; }
+      errorBox.textContent = data.error || 'השמירה נכשלה. נסו שוב.';
+      errorBox.hidden = false;
+      errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+
+    $('#edit-again').addEventListener('click', () => { show('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+    Account.ready().then(async (user) => {
+      if(!user) return show('edit-guest');
+      if(user.role !== 'supplier') return show('edit-customer');
+      const { ok, data } = await api('/api/supplier/profile');
+      if(!ok) return show('edit-guest');
+      if(!data.profile) return show('edit-no-profile');
+      fill(data.profile);
+      show('form');
+    });
+  }
+
   /* ---------- Supplier dashboard (real data only) ---------- */
   function initDashboard(){
     const panel = $('#dash-profile');
@@ -1349,6 +1427,7 @@
     initVendorsPage();
     initVendorProfile();
     initJoinPage();
+    initEditProfile();
     initDashboard();
     initFavoritesPage();
     initLoginPage();

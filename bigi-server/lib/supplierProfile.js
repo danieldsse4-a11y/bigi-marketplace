@@ -48,6 +48,28 @@ function parseForm(onError) {
   return (req, res, next) => upload(req, res, (err) => (err ? onError(req, res, uploadErrorMessage(err)) : next()));
 }
 
+// Editing takes a new logo and nothing else, so nothing else is read from the
+// request at all — and the 2MB logo limit applies while the file streams in.
+const editUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_LOGO_BYTES, files: 1 },
+  fileFilter(req, file, cb) {
+    if (file.fieldname !== 'logo' || !IMAGE_MIME.has(file.mimetype)) {
+      return cb(new Error('סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
+    }
+    cb(null, true);
+  },
+}).fields([{ name: 'logo', maxCount: 1 }]);
+
+function parseEditForm(onError) {
+  return (req, res, next) => editUpload(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return onError(req, res, 'הלוגו גדול מדי — עד 2MB.');
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return onError(req, res, 'בעריכה אפשר להחליף רק את הלוגו.');
+    onError(req, res, err.message);
+  });
+}
+
 function readForm(req) {
   const text = (key) => String(req.body?.[key] || '').trim();
   const captionsRaw = req.body?.productCaptions;
@@ -68,6 +90,33 @@ function readForm(req) {
     logoFile: req.files?.logo?.[0],
     videoFile: req.files?.video?.[0],
   };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// The parts of a profile a supplier can change after it exists.
+function readEditForm(req) {
+  const text = (key) => String(req.body?.[key] || '').trim();
+  return {
+    description: text('description'),
+    contactEmail: text('contactEmail'),
+    packages: text('packages'),
+    socialLinks: text('socialLinks'),
+    removeLogo: text('removeLogo') === '1',
+    logoFile: req.files?.logo?.[0],
+  };
+}
+
+// Returns { error } or the cleaned values ready to store.
+function checkEdit(form) {
+  if (form.description.length > 2000) return { error: 'התיאור ארוך מדי (עד 2000 תווים).' };
+  if (form.contactEmail && (form.contactEmail.length > 120 || !EMAIL_RE.test(form.contactEmail))) {
+    return { error: 'כתובת המייל אינה תקינה.' };
+  }
+  if (form.logoFile && form.logoFile.size > MAX_LOGO_BYTES) return { error: 'הלוגו גדול מדי — עד 2MB.' };
+  const extras = parseExtras(form);
+  if (extras.error) return { error: extras.error };
+  return { description: form.description, contactEmail: form.contactEmail, packages: extras.packages, socialLinks: extras.socialLinks };
 }
 
 function normalizeVideoLink(raw) {
@@ -265,5 +314,6 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
 module.exports = {
   MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS, MAX_LOGO_BYTES,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
+  parseEditForm, readEditForm, checkEdit,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };
