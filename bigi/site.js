@@ -966,7 +966,95 @@
 
     enhanceFileInput(logoInput, 'בחרו לוגו חדש', 'לא נבחר לוגו');
 
+    // The phone is required from a supplier; an admin editing a demo profile
+    // may leave it empty, as on the admin create form.
+    const phoneInput = $('#ef-phone');
+    if(adminId){ phoneInput.required = false; $('#ef-phone-star').hidden = true; }
+
+    /* Photos: the current ones as thumbnails (✕ marks one for removal, and
+       pressing it again brings it back), plus rows for new ones. Nothing
+       changes until the form is saved. */
+    const photoGrid = $('#edit-photos');
+    const newRows = $('#edit-new-photos');
+    const addPhotoBtn = $('#edit-add-photo');
+    const toRemove = new Set();
+    let currentPhotos = [];
+
+    const newFiles = () => $$('.product-photo-row', newRows)
+      .map(row => ({ file: $('input[type=file]', row).files[0], caption: $('.photo-caption-input', row).value.trim() }))
+      .filter(r => r.file);
+    const photoTotal = () => currentPhotos.length - toRemove.size + newFiles().length;
+
+    function updatePhotoCount(){
+      const total = photoTotal();
+      const counter = $('#edit-photo-count');
+      counter.textContent = `(${total} מתוך ${MAX_PRODUCT_IMAGES})`;
+      counter.classList.toggle('is-low', total < MIN_PRODUCT_IMAGES);
+      const rows = $$('.product-photo-row', newRows).length;
+      addPhotoBtn.hidden = currentPhotos.length - toRemove.size + rows >= MAX_PRODUCT_IMAGES;
+    }
+
+    function renderPhotos(){
+      photoGrid.innerHTML = currentPhotos.map((p, i) => {
+        const gone = toRemove.has(p.file);
+        return `
+        <div class="edit-photo${gone ? ' is-removed' : ''}" data-i="${i}">
+          <img src="${esc(p.file)}" alt="${esc(p.caption)}" loading="lazy">
+          <span class="edit-photo-cap">${gone ? 'תוסר בשמירה' : esc(p.caption)}</span>
+          <button type="button" class="edit-photo-x" aria-label="${gone ? 'ביטול ההסרה' : 'הסרת התמונה'}: ${esc(p.caption)}">${gone ? '↩' : '✕'}</button>
+        </div>`;
+      }).join('');
+      updatePhotoCount();
+    }
+    photoGrid.addEventListener('click', (e) => {
+      const btn = e.target.closest('.edit-photo-x');
+      if(!btn) return;
+      const photo = currentPhotos[Number(btn.closest('.edit-photo').dataset.i)];
+      if(toRemove.has(photo.file)) toRemove.delete(photo.file); else toRemove.add(photo.file);
+      renderPhotos();
+      const again = $(`.edit-photo[data-i="${btn.closest('.edit-photo').dataset.i}"] .edit-photo-x`, photoGrid);
+      if(again) again.focus();
+    });
+
+    function addNewRow(){
+      const row = document.createElement('div');
+      row.className = 'product-photo-row';
+      row.innerHTML = `
+        <div class="product-photo-fields">
+          <label class="product-photo-label">תמונה חדשה</label>
+          <input type="file" accept="image/png,image/jpeg,image/webp">
+          <input type="text" maxlength="200" placeholder="מה רואים בתמונה הזו?" class="photo-caption-input">
+        </div>
+        <button type="button" class="remove-row-btn" aria-label="ביטול התמונה החדשה">✕</button>`;
+      newRows.appendChild(row);
+      const input = $('input[type=file]', row);
+      enhanceFileInput(input);
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if(file && file.size > 5 * 1024 * 1024){
+          errorBox.textContent = 'אחת התמונות גדולה מדי — עד 5MB לתמונה.';
+          errorBox.hidden = false;
+          input.value = '';
+          input.dispatchEvent(new Event('change'));
+          return;
+        }
+        updatePhotoCount();
+      });
+      updatePhotoCount();
+      input.focus();
+    }
+    addPhotoBtn.addEventListener('click', addNewRow);
+    newRows.addEventListener('click', (e) => {
+      const btn = e.target.closest('.remove-row-btn');
+      if(btn){ btn.closest('.product-photo-row').remove(); updatePhotoCount(); }
+    });
+
     function fill(p){
+      phoneInput.value = p.phone || '';
+      currentPhotos = Array.isArray(p.productImages) ? p.productImages : [];
+      toRemove.clear();
+      newRows.innerHTML = '';
+      renderPhotos();
       $('#ef-description').value = p.description || '';
       $('#ef-email').value = p.contactEmail || '';
       editor = window.mountExtrasEditor($('#edit-extras'), { packages: p.packages, socialLinks: p.socialLinks });
@@ -998,14 +1086,29 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.hidden = true;
+      const fail = (message) => {
+        errorBox.textContent = message;
+        errorBox.hidden = false;
+        errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      };
+      // The same photo rules the server applies, so the answer is immediate.
+      const added = newFiles();
+      if(added.some(r => !r.caption)) return fail('לכל תמונה חדשה צריך תיאור.');
+      const total = photoTotal();
+      if(total < MIN_PRODUCT_IMAGES) return fail(`צריך להשאיר לפחות ${MIN_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
+      if(total > MAX_PRODUCT_IMAGES) return fail(`אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
+
       submitBtn.disabled = true;
-      submitBtn.textContent = 'שומר…';
+      submitBtn.textContent = added.length ? 'שומר ומעלה תמונות…' : 'שומר…';
       const extras = editor.collect();
       const formData = new FormData();
+      formData.set('phone', phoneInput.value.trim());
       formData.set('description', $('#ef-description').value);
       formData.set('contactEmail', $('#ef-email').value);
       formData.set('packages', JSON.stringify(extras.packages));
       formData.set('socialLinks', JSON.stringify(extras.socialLinks));
+      formData.set('removePhotos', JSON.stringify([...toRemove]));
+      added.forEach(r => { formData.append('productImages', r.file); formData.append('productCaptions', r.caption); });
       if(removeLogo.checked) formData.set('removeLogo', '1');
       if(logoInput.files && logoInput.files[0]) formData.set('logo', logoInput.files[0]);
       const { ok, status, data } = await api(endpoint, { method: 'PUT', formData });
@@ -1013,9 +1116,7 @@
       submitBtn.textContent = 'שמירת השינויים';
       if(ok){ fill(data.profile); logoInput.value = ''; logoInput.dispatchEvent(new Event('change')); show('edit-done'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
       if(status === 401){ location.href = 'login.html?next=' + encodeURIComponent(here); return; }
-      errorBox.textContent = data.error || 'השמירה נכשלה. נסו שוב.';
-      errorBox.hidden = false;
-      errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      fail(data.error || 'השמירה נכשלה. נסו שוב.');
     });
 
     $('#edit-again').addEventListener('click', () => { show('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); });

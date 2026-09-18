@@ -56,26 +56,41 @@ function parseForm(onError) {
   };
 }
 
-// Editing takes a new logo and nothing else, so nothing else is read from the
-// request at all — and the 2MB logo limit applies while the file streams in.
+// Editing takes a new logo and new work photos — images only, 5MB each while
+// they stream in (the logo's own 2MB limit is checked in checkEdit).
 const editUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_LOGO_BYTES, files: 1 },
+  limits: { fileSize: MAX_IMAGE_BYTES, files: MAX_PRODUCT_IMAGES + 1 },
   fileFilter(req, file, cb) {
-    if (file.fieldname !== 'logo' || !IMAGE_MIME.has(file.mimetype)) {
+    if (!['logo', 'productImages'].includes(file.fieldname) || !IMAGE_MIME.has(file.mimetype)) {
       return cb(new Error('סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
     }
     cb(null, true);
   },
-}).fields([{ name: 'logo', maxCount: 1 }]);
+}).fields([{ name: 'logo', maxCount: 1 }, { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES }]);
 
 function parseEditForm(onError) {
-  return (req, res, next) => editUpload(req, res, (err) => {
-    if (!err) return next();
-    if (err.code === 'LIMIT_FILE_SIZE') return onError(req, res, 'הלוגו גדול מדי — עד 2MB.');
-    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return onError(req, res, 'בעריכה אפשר להחליף רק את הלוגו.');
-    onError(req, res, err.message);
-  });
+  const tooBig = `סך כל הקבצים בשליחה אחת גדול מדי (עד ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB). העלו פחות תמונות בכל פעם.`;
+  return (req, res, next) => {
+    if (Number(req.headers['content-length'] || 0) > MAX_UPLOAD_BYTES) return onError(req, res, tooBig);
+    editUpload(req, res, (err) => {
+      if (!err) return next();
+      if (err.code === 'LIMIT_FILE_SIZE') return onError(req, res, 'אחת התמונות גדולה מדי — עד 5MB לתמונה.');
+      if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return onError(req, res, `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות.`);
+      onError(req, res, err.message);
+    });
+  };
+}
+
+// A phone number for WhatsApp: digits with the usual separators, 9–13 digits
+// (050-1234567, +972 50 123 4567). Returns an error message or null.
+function phoneError(phone, { required }) {
+  if (!phone) return required ? 'מספר טלפון לוואטסאפ הוא שדה חובה.' : null;
+  const digits = phone.replace(/\D/g, '');
+  if (phone.length > 25 || !/^[\d\s()+-]+$/.test(phone) || digits.length < 9 || digits.length > 13) {
+    return 'מספר הטלפון אינו תקין — לדוגמה 050-1234567.';
+  }
+  return null;
 }
 
 function readForm(req) {
@@ -105,26 +120,65 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // The parts of a profile a supplier can change after it exists.
 function readEditForm(req) {
   const text = (key) => String(req.body?.[key] || '').trim();
+  const captionsRaw = req.body?.productCaptions;
   return {
     description: text('description'),
     contactEmail: text('contactEmail'),
+    // null when the field wasn't sent at all (an older copy of the page):
+    // the phone is then left as it is.
+    phone: req.body?.phone === undefined ? null : text('phone'),
     packages: text('packages'),
     socialLinks: text('socialLinks'),
     removeLogo: text('removeLogo') === '1',
     logoFile: req.files?.logo?.[0],
+    // New photos, each with its caption, and the addresses of photos to remove.
+    productFiles: req.files?.productImages || [],
+    captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
+    removePhotos: text('removePhotos'),
   };
 }
 
-// Returns { error } or the cleaned values ready to store.
-function checkEdit(form) {
+// Returns { error } or the cleaned values ready to store. The photo count is
+// checked where the profile's current photos are known (see photoPlan).
+function checkEdit(form, { requirePhone = false } = {}) {
   if (form.description.length > 2000) return { error: 'התיאור ארוך מדי (עד 2000 תווים).' };
   if (form.contactEmail && (form.contactEmail.length > 120 || !EMAIL_RE.test(form.contactEmail))) {
     return { error: 'כתובת המייל אינה תקינה.' };
   }
+  const phoneProblem = form.phone === null ? null : phoneError(form.phone, { required: requirePhone });
+  if (phoneProblem) return { error: phoneProblem };
   if (form.logoFile && form.logoFile.size > MAX_LOGO_BYTES) return { error: 'הלוגו גדול מדי — עד 2MB.' };
+
+  const captions = form.captions.map((c) => String(c ?? '').trim());
+  if (captions.length !== form.productFiles.length) return { error: 'לכל תמונה חדשה צריך תיאור.' };
+  if (captions.some((c) => !c)) return { error: 'לכל תמונה חדשה צריך תיאור.' };
+  if (captions.some((c) => c.length > 200)) return { error: 'אחד מתיאורי התמונות ארוך מדי (עד 200 תווים).' };
+
+  const removals = parseJsonArray(form.removePhotos, 'התמונות להסרה');
+  if (removals.error) return { error: removals.error };
+  if (removals.value.some((u) => typeof u !== 'string')) return { error: 'התמונות להסרה לא תקינות.' };
+
   const extras = parseExtras(form);
   if (extras.error) return { error: extras.error };
-  return { description: form.description, contactEmail: form.contactEmail, packages: extras.packages, socialLinks: extras.socialLinks };
+  return {
+    description: form.description, contactEmail: form.contactEmail, phone: form.phone,
+    packages: extras.packages, socialLinks: extras.socialLinks,
+    captions, removePhotos: new Set(removals.value),
+  };
+}
+
+// Which of the profile's photos stay, given the ones asked to be removed.
+// Only the profile's own photos can be removed; anything else in the list is
+// ignored. Returns { keep, removed, error } — error when the result would
+// have too few or too many photos.
+function photoPlan(current, removePhotos, addedCount) {
+  const list = Array.isArray(current) ? current : [];
+  const keep = list.filter((p) => !removePhotos.has(p.file));
+  const removed = list.filter((p) => removePhotos.has(p.file));
+  const total = keep.length + addedCount;
+  if (total < MIN_PRODUCT_IMAGES) return { error: `צריך להשאיר לפחות ${MIN_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).` };
+  if (total > MAX_PRODUCT_IMAGES) return { error: `אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).` };
+  return { keep, removed };
 }
 
 function normalizeVideoLink(raw) {
@@ -252,12 +306,15 @@ function parseExtras(form) {
   return { packages: packages.value, socialLinks: socialLinks.value };
 }
 
-// Returns an error message for the form, or null when it's valid.
-function validateForm(form) {
+// Returns an error message for the form, or null when it's valid. The phone
+// is required from suppliers signing up; an admin's demo profile may skip it.
+function validateForm(form, { requirePhone = false } = {}) {
   if (!form.name) return 'שם העסק הוא שדה חובה.';
   if (form.name.length > 80) return 'שם העסק ארוך מדי.';
   if (!categoryById(form.category)) return 'נא לבחור קטגוריה מהרשימה.';
   if (form.city && !CITIES.includes(form.city)) return 'נא לבחור עיר מהרשימה.';
+  const phoneProblem = phoneError(form.phone, { required: requirePhone });
+  if (phoneProblem) return phoneProblem;
   if (form.description.length > 2000) return 'התיאור ארוך מדי (עד 2000 תווים).';
   if (form.productFiles.length < MIN_PRODUCT_IMAGES) {
     return `יש להעלות לפחות ${MIN_PRODUCT_IMAGES} תמונות מוצר (הועלו ${form.productFiles.length}).`;
@@ -325,6 +382,6 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
 module.exports = {
   MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS, MAX_LOGO_BYTES,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
-  parseEditForm, readEditForm, checkEdit,
+  parseEditForm, readEditForm, checkEdit, photoPlan, phoneError,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };

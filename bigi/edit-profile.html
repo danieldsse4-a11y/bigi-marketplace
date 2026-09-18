@@ -126,13 +126,27 @@
     <form id="edit-form" hidden>
       <div class="admin-edit-banner" id="edit-admin-banner" hidden>🔐 מצב מנהל — אתם עורכים פרופיל של עסק אחר. השינויים יופיעו באתר מיד.</div>
       <h2>עריכת פרטי הפרופיל</h2>
-      <p>שם העסק, הקטגוריה, התמונות והסרטון לא ניתנים לעריכה כאן כרגע.</p>
+      <p>שם העסק, הקטגוריה, תמונת הרקע והסרטון לא ניתנים לעריכה כאן כרגע.</p>
 
       <div class="form-alert" id="edit-form-error" role="alert" hidden></div>
 
       <div class="form-field">
+        <label for="ef-phone">טלפון לוואטסאפ <span id="ef-phone-star">*</span></label>
+        <input id="ef-phone" type="tel" autocomplete="tel" maxlength="25" required placeholder="050-0000000">
+        <div class="field-hint">לקוחות יפנו אליכם בלחיצה אחת בוואטסאפ.</div>
+      </div>
+
+      <div class="form-field">
         <label for="ef-description">תיאור העסק</label>
         <textarea id="ef-description" maxlength="2000" placeholder="ספרו ללקוחות למה כדאי לבחור בכם..."></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>התמונות שלכם <span class="edit-photo-count" id="edit-photo-count"></span></label>
+        <div class="field-hint" style="margin-bottom:12px;">לחצו ✕ כדי להסיר תמונה (לחיצה נוספת מחזירה אותה). צריך לפחות 5 תמונות ואפשר עד 30. JPG / PNG / WebP, עד 5MB לתמונה.</div>
+        <div class="edit-photos" id="edit-photos"></div>
+        <div id="edit-new-photos"></div>
+        <button type="button" id="edit-add-photo" class="btn btn-secondary btn-sm">+ הוספת תמונה</button>
       </div>
 
       <div class="form-field">

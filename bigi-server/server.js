@@ -311,7 +311,7 @@ app.post(
   supplierForm.parseForm((req, res, message) => res.status(400).json({ error: message })),
   async (req, res) => {
     const form = supplierForm.readForm(req);
-    const error = supplierForm.validateForm(form);
+    const error = supplierForm.validateForm(form, { requirePhone: true });
     if (error) return res.status(400).json({ error });
 
     const supplier = await supplierForm.buildSupplier(form, {
@@ -349,36 +349,82 @@ app.put(
     const target = Object.values(db.load().suppliers).find((s) => s.ownerUserId === req.user.id);
     if (!target) return res.status(404).json({ error: 'עוד לא שלחתם פרופיל.' });
     // Still theirs at the moment of saving — not just when the request started.
-    return saveProfileEdit(req, res, target.id, (s) => s.ownerUserId === req.user.id);
+    return saveProfileEdit(req, res, target.id, (s) => s.ownerUserId === req.user.id, { requirePhone: true });
   }
 );
+
+// Whether any profile other than `exceptId` uses this file. Some demo
+// profiles share image files, and removing a photo from one must never break
+// another.
+function imageInUse(data, url, exceptId) {
+  return Object.values(data.suppliers).some((s) => s.id !== exceptId && (
+    s.backgroundImage === url || s.logo === url || (s.productImages || []).some((p) => p.file === url)
+  ));
+}
 
 // The fields a supplier can change, applied to one profile. `stillAllowed` is
 // re-checked inside the write so nothing changes hands between check and save.
 // Shared by a supplier editing their own profile and an admin editing any.
-async function saveProfileEdit(req, res, id, stillAllowed) {
+async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = false } = {}) {
   const form = supplierForm.readEditForm(req);
-  const checked = supplierForm.checkEdit(form);
+  const checked = supplierForm.checkEdit(form, { requirePhone });
   if (checked.error) return res.status(400).json({ error: checked.error });
 
-  const newLogo = form.logoFile ? await storage.saveImage(id, form.logoFile) : null;
+  // The photo count is checked before anything is uploaded…
+  const before = db.load().suppliers[id];
+  if (!before) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+  const plan = supplierForm.photoPlan(before.productImages, checked.removePhotos, form.productFiles.length);
+  if (plan.error) return res.status(400).json({ error: plan.error });
+
+  const uploaded = [];
+  let newLogo = null;
+  const added = [];
+  try {
+    if (form.logoFile) { newLogo = await storage.saveImage(id, form.logoFile); uploaded.push(newLogo); }
+    for (const [i, file] of form.productFiles.entries()) {
+      const url = await storage.saveImage(id, file);
+      uploaded.push(url);
+      added.push({ file: url, caption: checked.captions[i] });
+    }
+  } catch (err) {
+    console.error('Edit upload failed:', err);
+    for (const url of uploaded) await storage.deleteImageByUrl(url);
+    return res.status(500).json({ error: 'העלאת התמונות נכשלה. נסו שוב.' });
+  }
+
   let replacedLogo = null;
+  let removed = [];
+  let problem = null;
   const saved = await db.withDb((data) => {
     const s = data.suppliers[id];
     if (!s || !stillAllowed(s)) return false;
+    // …and again against the photos as they are now, in case they changed.
+    const now = supplierForm.photoPlan(s.productImages, checked.removePhotos, added.length);
+    if (now.error) { problem = now.error; return false; }
     if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
+    s.productImages = [...now.keep, ...added];
+    removed = now.removed.map((p) => p.file)
+      .filter((url) => url !== s.backgroundImage && url !== s.logo && !imageInUse(data, url, id));
     s.description = checked.description;
     s.contactEmail = checked.contactEmail;
+    if (checked.phone !== null) s.phone = checked.phone;
     s.packages = checked.packages;
     s.socialLinks = checked.socialLinks;
     s.links = '';
     s.updatedAt = new Date().toISOString();
     return true;
   });
-  if (!saved) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
+  if (!saved) {
+    // Nothing was stored, so the files just uploaded belong to nothing.
+    for (const url of uploaded) await storage.deleteImageByUrl(url);
+    return res.status(problem ? 400 : 404).json({ error: problem || 'הפרופיל לא נמצא.' });
+  }
 
-  // Only once the new logo is safely stored does the old file go.
-  if (replacedLogo && replacedLogo !== newLogo) await storage.deleteImageByUrl(replacedLogo);
+  // Only once the change is safely stored do the old files go.
+  if (replacedLogo && replacedLogo !== newLogo && !imageInUse(db.load(), replacedLogo, id)) {
+    await storage.deleteImageByUrl(replacedLogo);
+  }
+  for (const url of removed) await storage.deleteImageByUrl(url);
   res.json({ profile: catalog.profileForAdmin(db.load(), id) });
 }
 

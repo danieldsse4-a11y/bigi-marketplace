@@ -825,6 +825,30 @@ body.lb-open{ position:fixed; left:0; right:0; width:100%; overflow:hidden; }
 
 /* Edit-profile page: the current logo, and its "remove" tick */
 .logo-current{ display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+
+/* Edit page: the supplier's current photos, each with a ✕ to remove it */
+.edit-photo-count{ font-weight:600; color:var(--muted); font-size:13px; margin-inline-start:6px; }
+.edit-photo-count.is-low{ color:#B8323C; font-weight:800; }
+.edit-photos{ display:grid; grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); gap:10px; margin-bottom:14px; }
+.edit-photos:empty{ display:none; }
+.edit-photo{ position:relative; aspect-ratio:1; border-radius:var(--radius-md); overflow:hidden; background:var(--bg-soft); box-shadow:var(--shadow-sm); }
+.edit-photo img{ width:100%; height:100%; object-fit:cover; display:block; transition:opacity .2s, filter .2s; }
+.edit-photo-cap{
+  position:absolute; inset-inline:0; bottom:0; padding:14px 8px 6px; font-size:11.5px; line-height:1.3; color:#fff;
+  background:linear-gradient(0deg, rgba(0,0,0,0.7), transparent);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.edit-photo-x{
+  position:absolute; top:6px; inset-inline-start:6px; width:32px; height:32px; border-radius:50%;
+  background:rgba(255,255,255,0.94); color:#B8323C; font-size:14px; font-weight:800;
+  box-shadow:0 2px 8px rgba(10,8,24,0.25); display:flex; align-items:center; justify-content:center;
+}
+.edit-photo-x:hover{ background:#fff; transform:scale(1.08); }
+.edit-photo-x:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; }
+/* Marked for removal: faded until saved, with an ↩ to bring it back */
+.edit-photo.is-removed img{ opacity:.3; filter:grayscale(1); }
+.edit-photo.is-removed .edit-photo-cap{ background:#B8323C; font-weight:800; text-align:center; }
+.edit-photo.is-removed .edit-photo-x{ color:var(--primary); }
 .logo-current img{ width:64px; height:64px; object-fit:contain; background:#fff; border:1px solid var(--line); border-radius:14px; padding:5px; }
 .form-field .check-row, .check-row{ display:flex; align-items:center; gap:8px; margin-bottom:0; font-size:14px; font-weight:600; cursor:pointer; min-height:44px; }
 .check-row input{ flex:0 0 auto; width:18px; height:18px; padding:0; margin:0; accent-color:var(--primary); }
