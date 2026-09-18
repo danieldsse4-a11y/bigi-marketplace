@@ -27,6 +27,34 @@ const enquiryText = (name) => `שלום ${name}, מצאתי אתכם ב${SITE_NA
 
 const whatsappIcon = '<svg viewBox="0 0 32 32" fill="currentColor" width="17" height="17" aria-hidden="true"><path d="M16.03 3C9.13 3 3.53 8.6 3.53 15.5c0 2.36.65 4.56 1.78 6.45L3 29l7.24-2.26a12.4 12.4 0 0 0 5.79 1.44h.01c6.9 0 12.5-5.6 12.5-12.5S22.93 3 16.03 3zm0 22.6h-.01a10.4 10.4 0 0 1-5.3-1.45l-.38-.22-4.3 1.34 1.37-4.2-.25-.4a10.32 10.32 0 0 1-1.6-5.57c0-5.75 4.68-10.43 10.44-10.43 2.79 0 5.4 1.09 7.38 3.06a10.35 10.35 0 0 1 3.05 7.38c0 5.75-4.68 10.43-10.4 10.43zm5.72-7.82c-.31-.16-1.86-.92-2.15-1.02-.29-.1-.5-.16-.71.16-.21.31-.82 1.02-1 1.23-.19.21-.37.23-.68.08-.31-.16-1.32-.49-2.51-1.56-.93-.83-1.56-1.85-1.74-2.16-.18-.31-.02-.48.14-.63.14-.14.31-.37.47-.55.16-.19.21-.31.31-.52.1-.21.05-.39-.02-.55-.08-.16-.71-1.72-.98-2.36-.26-.62-.52-.54-.71-.55h-.6c-.21 0-.55.08-.84.39-.29.31-1.1 1.08-1.1 2.62 0 1.54 1.13 3.03 1.29 3.24.16.21 2.22 3.39 5.38 4.75.75.33 1.34.52 1.8.66.76.24 1.44.21 1.99.13.61-.09 1.86-.76 2.12-1.5.26-.73.26-1.36.18-1.5-.08-.13-.29-.21-.6-.37z"/></svg>';
 
+/* ---------- Gallery layout: every row is full, whatever the number of photos.
+   On a computer the grid has 12 columns, and a row holds 4, 3 or 2 tiles
+   (each 3, 4 or 6 columns wide). Rows of 4 are the default; when the count
+   doesn't divide by 4, the leftover becomes rows of 3 (bigger photos) placed
+   at the top, where the biggest photos look best. Only 1 and 5 need other
+   shapes: one wide photo, and a row of 2 above a row of 3. */
+function galleryRows(n) {
+  if (n <= 4) return n ? [n] : [];
+  const fours = Math.floor(n / 4);
+  const fill = (count) => Array(count).fill(4);
+  switch (n % 4) {
+    case 0: return fill(fours);
+    case 3: return [3, ...fill(fours)];
+    case 2: return [3, 3, ...fill(fours - 1)];
+    default: return n === 5 ? [2, 3] : [3, 3, 3, ...fill(fours - 2)];
+  }
+}
+
+// With more photos than this (plus one), the page shows only this many.
+const GALLERY_PREVIEW = 7;
+
+// One class list per tile. On a phone the grid has 2 columns, so with an odd
+// count the first tile goes full width instead of leaving a hole at the end.
+function galleryLayout(n) {
+  const spans = galleryRows(n).flatMap((size) => Array(size).fill(12 / size));
+  return spans.map((span, i) => [`span-${span}`, n % 2 === 1 && i === 0 ? 'm-wide' : ''].filter(Boolean).join(' '));
+}
+
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
 const starsText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
@@ -101,6 +129,22 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     : `${shareSummary} — בביגי ספקים`;
   const whatsapp = waLink(phone, enquiryText(name));
   const socialLinks = socialLinksOf(supplier);
+  // The video tile, when there is one, comes first and counts as a tile.
+  // A long gallery shows a preview of GALLERY_PREVIEW tiles; the last one says
+  // "+N" and opens the full-screen viewer, which still has every photo.
+  const tileCount = productImages.length + (video ? 1 : 0);
+  const collapsed = tileCount > GALLERY_PREVIEW + 1;
+  const shown = collapsed ? GALLERY_PREVIEW : tileCount;
+  const hiddenCount = tileCount - shown;
+  // The tiles past the preview get a layout of their own, so even with
+  // scripts off (when they are not hidden) every row is still full.
+  const layout = [...galleryLayout(shown), ...galleryLayout(hiddenCount)];
+  const tileExtra = (t) => {
+    if (t >= shown) return ' gallery-extra';
+    return collapsed && t === shown - 1 ? ' gallery-last' : '';
+  };
+  const moreBadge = (t) => (collapsed && t === shown - 1
+    ? `<span class="gallery-more" aria-hidden="true"><bdi dir="ltr">+${hiddenCount}</bdi></span>` : '');
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -166,6 +210,27 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     color:#fff; font-size:11.5px; line-height:1.3;
   }
   .supplier-contact a{ display:inline-block; padding:4px 0; }
+
+  /* See galleryLayout(): rows of 4, 3 or 2 tiles on 12 columns, always full. */
+  .gallery-mosaic{ grid-template-columns:repeat(12, minmax(0, 1fr)); }
+  .gallery-mosaic > .span-3{ grid-column:span 3; }
+  .gallery-mosaic > .span-4{ grid-column:span 4; }
+  .gallery-mosaic > .span-6{ grid-column:span 6; aspect-ratio:4/3; }
+  .gallery-mosaic > .span-12{ grid-column:span 12; aspect-ratio:16/9; }
+  /* A big tile only needs a gentle lift, not the small tiles' zoom */
+  .gallery-mosaic > .span-6:hover, .gallery-mosaic > .span-12:hover{ transform:scale(1.02); }
+  /* A long gallery: only the preview shows; the viewer still has every photo.
+     Without scripts nothing is hidden, since the viewer wouldn't open. */
+  .js .gallery-mosaic > .gallery-extra{ display:none; }
+  .gallery-more{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(20,16,40,0.58); color:#fff; font-size:34px; font-weight:800; letter-spacing:.5px;
+    transition:background .25s var(--ease-out);
+  }
+  .gallery-last:hover .gallery-more{ background:rgba(20,16,40,0.45); }
+  .gallery-last figcaption{ display:none; }
+  .gallery-all{ display:none; margin-top:16px; }
+  .js .gallery-all{ display:inline-flex; }
 
   /* Small pills in the card's top-left corner, styled like the header's nav buttons.
      Without JS every panel simply stays visible and the pills stay hidden. */
@@ -261,6 +326,10 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     .supplier-glass-card{ margin-top:-48px; }
     .supplier-gallery-item figcaption{ font-size:12.5px; }
     .supplier-contact a{ padding:8px 0; word-break:break-all; }
+    /* Two columns on a phone; with an odd count the first tile is full width */
+    .gallery-mosaic{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .gallery-mosaic > .supplier-gallery-item{ grid-column:auto; aspect-ratio:1; }
+    .gallery-mosaic > .supplier-gallery-item.m-wide{ grid-column:span 2; aspect-ratio:16/10; }
   }
 </style>
 </head>
@@ -349,26 +418,30 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 
     <div class="supplier-section">
       <h3>${video ? 'תמונות וסרטון' : 'תמונות'}</h3>
-      <div class="gallery-grid">
+      <div class="gallery-grid gallery-mosaic">
         ${!video ? '' : video.kind === 'link' ? `
-          <a class="supplier-gallery-item media-tile" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"
+          <a class="supplier-gallery-item media-tile ${layout[0]}" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"
              style="background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;">
             <span class="media-tile-label">סרטון</span>
           </a>
         ` : `
-          <figure class="supplier-gallery-item media-tile" style="margin:0; background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;"
+          <figure class="supplier-gallery-item media-tile ${layout[0]}" style="margin:0; background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;"
              data-lb-type="${video.embed ? 'embed' : 'video'}" data-lb-src="${escapeHtml(video.embed || video.url)}"
              data-lb-poster="${escapeHtml(backgroundImage)}" data-lb-caption="${escapeHtml(name)}">
             <span class="media-tile-label">סרטון</span>
           </figure>
         `}
-        ${productImages.map((p) => `
-          <figure class="supplier-gallery-item" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}">
-            <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption)}">
+        ${productImages.map((p, i) => {
+          const t = i + (video ? 1 : 0);
+          return `
+          <figure class="supplier-gallery-item ${layout[t]}${tileExtra(t)}" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}"${collapsed && t === shown - 1 ? ` aria-label="${escapeHtml(`${p.caption} — ועוד ${hiddenCount} תמונות`)}"` : ''}>
+            <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption)}" loading="lazy">
             <figcaption>${escapeHtml(p.caption)}</figcaption>
-          </figure>
-        `).join('')}
+            ${moreBadge(t)}
+          </figure>`;
+        }).join('')}
       </div>
+      ${collapsed ? `<button type="button" class="btn btn-secondary btn-sm gallery-all">📷 הצגת כל ${productImages.length} התמונות${video ? ' והסרטון' : ''}</button>` : ''}
     </div>
 
   </div>
@@ -383,7 +456,17 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 </footer>
 
 <script src="/lightbox.js"></script>
-<script>window.Lightbox && window.Lightbox.attach(document.querySelector('.gallery-grid'));</script>
+<script>
+(function(){
+  var grid = document.querySelector('.gallery-grid');
+  if(!window.Lightbox || !grid) return;
+  window.Lightbox.attach(grid);
+  // "Show all" opens the viewer at the first tile; it has every photo.
+  var all = document.querySelector('.gallery-all');
+  var first = grid.querySelector('[data-lb-src]');
+  if(all && first) all.addEventListener('click', function(){ first.click(); });
+})();
+</script>
 <script>
 (function(){
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.profile-tab'));
@@ -486,4 +569,4 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 </html>`;
 }
 
-module.exports = { supplierViewPage };
+module.exports = { supplierViewPage, galleryLayout };
