@@ -37,4 +37,36 @@ async function sendEmail({ to, subject, html }) {
   return { ok: true };
 }
 
-module.exports = { sendEmail };
+// What the admin area shows about email delivery. The API key itself is never
+// returned — only whether one is set, and what Resend says about the account.
+async function emailStatus() {
+  const fromAddress = (EMAIL_FROM.match(/<([^>]+)>/) || [null, EMAIL_FROM])[1].trim().toLowerCase();
+  const fromDomain = fromAddress.split('@')[1] || '';
+  const status = {
+    keySet: Boolean(RESEND_API_KEY),
+    from: EMAIL_FROM,
+    fromAddress,
+    fromDomain,
+    isTestSender: fromDomain === 'resend.dev',
+    domains: null,
+    error: null,
+  };
+  if (!RESEND_API_KEY) return status;
+
+  try {
+    const res = await fetch('https://api.resend.com/domains', {
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      status.error = `Resend ${res.status}: ${body.message || 'unknown error'}`;
+      return status;
+    }
+    status.domains = (body.data || []).map((d) => ({ name: d.name, status: d.status }));
+  } catch (err) {
+    status.error = err.message;
+  }
+  return status;
+}
+
+module.exports = { sendEmail, emailStatus };

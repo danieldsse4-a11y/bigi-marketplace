@@ -15,6 +15,7 @@ function adminTabs(active) {
     ${tab('/admin-suppliers/profiles', 'profiles', '📋 כל הפרופילים')}
     ${tab('/admin-suppliers/featured', 'featured', '⭐ מומלצים')}
     ${tab('/admin-suppliers/accounts', 'accounts', '👥 חשבונות')}
+    ${tab('/admin-suppliers/email', 'email', '✉️ מיילים')}
   </nav>`;
 }
 
@@ -99,6 +100,22 @@ function page({ title, body, extraHead = '', wide = false }) {
   }
   .delete-btn:hover:not([disabled]){ background:var(--accent); color:#fff; }
   .delete-btn[disabled]{ background:var(--bg-soft); color:var(--muted); cursor:default; }
+  .email-verdict{ padding:16px 18px; border-radius:var(--radius-md); margin:18px 0; font-size:14px; line-height:1.6; }
+  .email-verdict strong{ display:block; margin-bottom:4px; font-size:15px; }
+  .email-verdict.ok{ background:#E6F9F5; color:#0C6E58; }
+  .email-verdict.warn{ background:#FFF4DB; color:#8A5A00; }
+  .email-verdict.error{ background:var(--accent-soft); color:#B8323C; }
+  .email-facts{ display:grid; gap:10px; }
+  .email-facts dt{ font-size:12.5px; color:var(--muted); }
+  .email-facts dd{ font-size:14px; font-weight:700; word-break:break-all; }
+  /* Addresses and domains are Latin text inside an RTL page */
+  .ltr-value{ display:inline-block; direction:ltr; text-align:start; unicode-bidi:isolate; }
+  .email-domains{ display:grid; gap:8px; font-size:14px; }
+  .email-domains li{ padding:10px 14px; border:1px solid var(--line); border-radius:var(--radius-md); }
+  .email-none{ color:var(--muted); font-size:14px; }
+  .email-result{ margin-top:14px; padding:12px 16px; border-radius:var(--radius-md); font-size:14px; background:var(--bg-soft); word-break:break-word; }
+  .email-result.ok{ background:#E6F9F5; color:#0C6E58; }
+  .email-result.error{ background:var(--accent-soft); color:#B8323C; }
   .empty-profiles{ text-align:center; padding:26px 12px; color:var(--muted); border:1px dashed var(--line); border-radius:var(--radius-md); }
   .empty-profiles .btn{ margin-top:14px; }
 

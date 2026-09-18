@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('./lib/db');
 const storage = require('./lib/storage');
-const { sendEmail } = require('./lib/email');
+const { sendEmail, emailStatus } = require('./lib/email');
 const auth = require('./lib/auth');
 const catalog = require('./lib/catalog');
 const supplierForm = require('./lib/supplierProfile');
@@ -18,6 +18,7 @@ const { messagePage, escapeHtml } = require('./views/layout');
 const { createFormPage, successPage } = require('./views/adminForm');
 const { profilesPage } = require('./views/adminProfiles');
 const { accountsPage } = require('./views/adminAccounts');
+const { emailPage } = require('./views/adminEmail');
 const { featuredPage } = require('./views/adminFeatured');
 const { supplierViewPage } = require('./views/supplierView');
 
@@ -96,6 +97,7 @@ const supplierSubmitLimiter = limiter(60, 10, 'יותר מדי ניסיונות 
 const createLimiter = limiter(60, 20, 'יותר מדי בקשות ליצירת פרופיל. נסו שוב מאוחר יותר.');
 const visibilityLimiter = limiter(15, 150, 'יותר מדי שינויים. נסו שוב בעוד כמה דקות.');
 const deleteLimiter = limiter(15, 30, 'יותר מדי מחיקות. נסו שוב בעוד כמה דקות.');
+const emailTestLimiter = limiter(15, 10, 'יותר מדי מיילי בדיקה. נסו שוב בעוד כמה דקות.');
 const resetRequestLimiter = limiter(60, 5, 'יותר מדי בקשות איפוס. נסו שוב מאוחר יותר.');
 const resetConfirmLimiter = limiter(15, 10, 'יותר מדי ניסיונות. נסו שוב בעוד כמה דקות.');
 // Each assistant message costs money, so cap it per visitor.
@@ -354,6 +356,37 @@ app.get('/admin-suppliers/featured', requireDb, auth.requireAdmin, (req, res) =>
 app.get('/admin-suppliers/accounts', requireDb, auth.requireAdmin, (req, res) => {
   res.send(accountsPage({ adminEmail: req.adminEmail, accounts: auth.accountRows(db.load()) }));
 });
+
+app.get('/admin-suppliers/email', auth.requireAdmin, async (req, res) => {
+  res.send(emailPage({ adminEmail: req.adminEmail, status: await emailStatus() }));
+});
+
+// Sends to the signed-in admin's own address only, and hands back whatever
+// Resend said — that error message is the whole point of the page.
+app.post(
+  '/admin-suppliers/email/test',
+  express.json({ limit: '1kb' }),
+  requireSameOrigin,
+  auth.requireAdmin,
+  emailTestLimiter,
+  async (req, res) => {
+    const to = req.user.email;
+    try {
+      await sendEmail({
+        to,
+        subject: 'בדיקת שליחה — ביגי ספקים',
+        html: `<div dir="rtl" style="font-family:sans-serif;">
+          <p>שלום ${escapeHtml(req.user.name)},</p>
+          <p>זהו מייל בדיקה שנשלח מאזור הניהול של ביגי ספקים. אם הוא הגיע — שליחת המיילים באתר עובדת.</p>
+        </div>`,
+      });
+      res.json({ ok: true, to });
+    } catch (err) {
+      console.error('Test email failed:', err.message);
+      res.status(502).json({ error: err.message });
+    }
+  }
+);
 
 app.post(
   '/admin-suppliers/accounts/:id/delete',
