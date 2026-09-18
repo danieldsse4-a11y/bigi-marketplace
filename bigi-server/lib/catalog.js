@@ -73,24 +73,29 @@ function adminRows(db) {
   const featuredRank = new Map(featuredKeys(db).map((k, i) => [k, i]));
   const rows = Object.values(db.suppliers)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    .map((s) => ({
-      key: s.id,
-      kind: 'created',
-      fromSupplier: s.source === 'supplier',
-      name: s.name,
-      categoryLabel: categoryById(s.category)?.name || s.category || '',
-      city: s.city || '',
-      createdAt: s.createdAt,
-      createdBy: s.source === 'supplier' && db.users[s.ownerUserId]
-        ? `${db.users[s.ownerUserId].name} (${db.users[s.ownerUserId].email})`
-        : s.createdBy,
-      published: Boolean(s.isPublic),
-      featured: featuredRank.has(s.id),
-      badge: badgeOverride(db, s.id),
-      defaultBadge: 'חדש',
-      viewUrl: `/supplier/view/${s.id}`,
-      image: s.backgroundImage,
-    }));
+    .map((s) => {
+      const owner = (s.ownerUserId && db.users[s.ownerUserId]) || null;
+      return {
+        key: s.id,
+        kind: 'created',
+        fromSupplier: s.source === 'supplier',
+        // The account that can edit this profile — none, for one an admin
+        // created and never attached to anybody.
+        ownerEmail: owner ? owner.email : '',
+        ownerName: owner ? owner.name : '',
+        name: s.name,
+        categoryLabel: categoryById(s.category)?.name || s.category || '',
+        city: s.city || '',
+        createdAt: s.createdAt,
+        createdBy: s.source === 'supplier' && owner ? `${owner.name} (${owner.email})` : s.createdBy,
+        published: Boolean(s.isPublic),
+        featured: featuredRank.has(s.id),
+        badge: badgeOverride(db, s.id),
+        defaultBadge: 'חדש',
+        viewUrl: `/supplier/view/${s.id}`,
+        image: s.backgroundImage,
+      };
+    });
   const fromSuppliers = rows.filter((r) => r.fromSupplier);
   const created = rows.filter((r) => !r.fromSupplier);
 
@@ -146,6 +151,52 @@ function ownProfile(db, userId) {
     createdAt: s.createdAt,
     viewUrl: `/supplier/view/${s.id}`,
   };
+}
+
+/* ---------- Who owns a profile.
+   A profile submitted through "הצטרפות כספק" belongs to the account that sent
+   it. One created in the admin area belongs to nobody, so no account can edit
+   it — attaching an account here is what gives that account the edit button,
+   the dashboard card and /edit-profile.html.
+
+   Attaching changes nothing else about the profile: a published profile stays
+   published, and nothing needs re-approving. ---------- */
+
+// Finds the account by address the way sign-in does, so case and spaces don't
+// matter. An empty address means "no owner". Returns { error }, or
+// { ownerUserId, owner } where both are null for an empty address.
+// `exceptProfileId` is the profile being assigned, so re-saving the same owner
+// on the same profile isn't mistaken for a second profile.
+function lookupOwner(db, rawEmail, exceptProfileId) {
+  const email = String(rawEmail || '').trim().toLowerCase();
+  if (!email) return { ownerUserId: null, owner: null };
+
+  const user = Object.values(db.users).find((u) => u.email === email);
+  if (!user) {
+    return { error: `אין חשבון עם הכתובת ${email}. בעל העסק צריך להירשם לאתר, ואז אפשר לשייך אליו את הפרופיל.` };
+  }
+
+  // The same rule as sign-up: one account, one profile.
+  const taken = Object.values(db.suppliers).find((s) => s.ownerUserId === user.id && s.id !== exceptProfileId);
+  if (taken) {
+    return { error: `לחשבון הזה כבר יש פרופיל ("${taken.name}"). לכל חשבון יכול להיות פרופיל אחד בלבד.` };
+  }
+
+  return { ownerUserId: user.id, owner: { name: user.name, email: user.email } };
+}
+
+// Returns { error }, { owner } or { detached: true }.
+function setOwner(db, key, rawEmail, adminEmail) {
+  const supplier = db.suppliers[key];
+  if (!supplier) return { error: 'הפרופיל לא נמצא. אפשר לשייך בעלים רק לפרופיל אמיתי, לא לספק לדוגמה.' };
+
+  const found = lookupOwner(db, rawEmail, supplier.id);
+  if (found.error) return { error: found.error };
+  if (!found.ownerUserId && !supplier.ownerUserId) return { error: 'לפרופיל הזה אין בעלים, אז אין מה לנתק.' };
+
+  supplier.ownerUserId = found.ownerUserId;
+  supplier.ownerSetBy = { at: new Date().toISOString(), by: adminEmail || '' };
+  return found.owner ? { owner: found.owner } : { detached: true };
 }
 
 // Removes a profile an admin (or a supplier) created, and takes it out of the
@@ -236,4 +287,4 @@ function dataJs(db, { isAdmin }) {
   return CONST_NAMES.map((name) => `const ${name} = ${JSON.stringify(values[name])};`).join('\n') + '\n';
 }
 
-module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, setBadge, BADGE_CHOICES, ownProfile, setPublished, deleteProfile, dataJs };
+module.exports = { normalizePhone, adminRows, featuredRows, setFeatured, setBadge, BADGE_CHOICES, ownProfile, lookupOwner, setOwner, setPublished, deleteProfile, dataJs };

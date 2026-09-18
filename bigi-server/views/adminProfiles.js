@@ -31,6 +31,24 @@ function badgePicker(row) {
   </label>`;
 }
 
+// Which account may edit this profile. A profile created here has no owner
+// until an admin attaches one, and then nobody can edit it — not even the admin
+// who created it — so the state is spelled out rather than left blank.
+function ownerPicker(row) {
+  const owner = row.ownerEmail
+    ? `בעלים: <strong>${escapeHtml(row.ownerName)}</strong> <span class="ltr-value">(${escapeHtml(row.ownerEmail)})</span>`
+    : 'אין בעלים — אף חשבון לא יכול לערוך את הפרופיל';
+  return `<div class="owner-pick" data-key="${escapeHtml(row.key)}">
+    <div class="owner-state" data-owner-state${row.ownerEmail ? '' : ' data-empty'}>${owner}</div>
+    <div class="owner-actions">
+      <input type="email" class="owner-input" dir="ltr" autocomplete="off" spellcheck="false"
+        placeholder="אימייל של חשבון קיים" aria-label="${escapeHtml(row.name)} — שיוך בעלים">
+      <button type="button" class="owner-save">שיוך בעלים</button>
+      <button type="button" class="owner-clear" data-name="${escapeHtml(row.name)}"${row.ownerEmail ? '' : ' hidden'}>ניתוק</button>
+    </div>
+  </div>`;
+}
+
 function createdRow(row) {
   const meta = [row.categoryLabel, row.city, row.createdAt && `נוצר ${dateFmt.format(new Date(row.createdAt))}`]
     .filter(Boolean).map(escapeHtml).join(' · ');
@@ -48,6 +66,7 @@ function createdRow(row) {
           <button type="button" class="delete-link" data-delete-profile="${escapeHtml(row.key)}" data-name="${escapeHtml(row.name)}">מחיקה</button>
         </div>
         ${badgePicker(row)}
+        ${ownerPicker(row)}
       </div>
       ${visibilitySwitch(row)}
     </div>`;
@@ -203,6 +222,65 @@ function profilesPage({ adminEmail, fromSuppliers, created, samples, reviewCount
                 showToast('התג לא נשמר — נסו שוב', true);
               })
               .finally(function(){ sel.disabled = false; });
+          });
+        });
+
+        document.querySelectorAll('.owner-pick').forEach(function(box){
+          var input = box.querySelector('.owner-input');
+          var save = box.querySelector('.owner-save');
+          var clear = box.querySelector('.owner-clear');
+          var state = box.querySelector('[data-owner-state]');
+
+          function send(email, done){
+            save.disabled = true; clear.disabled = true; input.disabled = true;
+            fetch('/admin-suppliers/profiles/' + encodeURIComponent(box.dataset.key) + '/owner', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: email })
+            })
+              .then(function(r){
+                if (r.status === 401) { location.href = '/admin-suppliers/login'; throw new Error('auth'); }
+                return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+              })
+              .then(function(res){
+                if (!res.ok) throw new Error(res.data.error || 'השיוך נכשל');
+                done(res.data.owner);
+              })
+              .catch(function(err){
+                if (err.message === 'auth') return;
+                showToast(err.message, true);
+              })
+              .finally(function(){ save.disabled = false; clear.disabled = false; input.disabled = false; });
+          }
+
+          save.addEventListener('click', function(){
+            var email = input.value.trim();
+            if (!email) { showToast('הזינו אימייל של חשבון קיים', true); input.focus(); return; }
+            send(email, function(owner){
+              state.innerHTML = 'בעלים: <strong></strong> <span class="ltr-value"></span>';
+              state.querySelector('strong').textContent = owner.name;
+              state.querySelector('.ltr-value').textContent = '(' + owner.email + ')';
+              state.removeAttribute('data-empty');
+              clear.hidden = false;
+              clear.dataset.email = owner.email;
+              input.value = '';
+              showToast('הפרופיל שויך ל' + owner.name + ' ✓');
+            });
+          });
+
+          input.addEventListener('keydown', function(e){
+            if (e.key === 'Enter') { e.preventDefault(); save.click(); }
+          });
+
+          clear.addEventListener('click', function(){
+            if (!window.confirm('לנתק את הבעלים של "' + clear.dataset.name + '"?\\n\\nהפרופיל יישאר באתר בדיוק כפי שהוא, אבל אף חשבון לא יוכל לערוך אותו.')) return;
+            send('', function(){
+              state.textContent = 'אין בעלים — אף חשבון לא יכול לערוך את הפרופיל';
+              state.setAttribute('data-empty', '');
+              clear.hidden = true;
+              showToast('הבעלים נותק');
+            });
           });
         });
 

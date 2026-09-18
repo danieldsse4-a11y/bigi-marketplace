@@ -88,6 +88,9 @@ function readForm(req) {
     description: text('description'),
     phone: text('phone'),
     contactEmail: text('contactEmail'),
+    // Only the admin create form offers this; the supplier sign-up form has no
+    // such field, and its route sets the owner to the account that submitted.
+    ownerEmail: text('ownerEmail'),
     links: text('links'),
     packages: text('packages'),
     socialLinks: text('socialLinks'),

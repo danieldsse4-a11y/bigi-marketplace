@@ -68,6 +68,13 @@ function canActAsSupplier(user) {
   return Boolean(user && (user.role === 'supplier' || isAdminUser(user)));
 }
 
+// An admin can attach a profile to any account, including one opened as a
+// customer. Owning the profile is what counts for editing it, whatever kind of
+// account it is.
+function ownsProfile(user) {
+  return Boolean(user && Object.values(load().suppliers).some((s) => s.ownerUserId === user.id));
+}
+
 // What the browser is allowed to know about the signed-in account.
 function publicUser(user) {
   if (!user) return null;
@@ -77,6 +84,7 @@ function publicUser(user) {
     role: user.role,
     isAdmin: isAdminUser(user),
     adminPending: isWhitelisted(user.email) && !user.adminVerifiedAt,
+    hasProfile: ownsProfile(user),
   };
 }
 
@@ -276,6 +284,7 @@ module.exports = {
   getWhitelist,
   isWhitelisted,
   canActAsSupplier,
+  ownsProfile,
   normalizeEmail,
   publicUser,
   createUser,

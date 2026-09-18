@@ -147,6 +147,22 @@ function page({ title, body, extraHead = '', wide = false }) {
   .badge-select:focus{ border-color:var(--primary); outline:none; box-shadow:0 0 0 3px var(--primary-soft); }
   .badge-select:disabled{ opacity:.55; }
   .badge-pick-locked{ margin-top:8px; font-size:12px; font-weight:700; color:var(--muted); }
+
+  .owner-pick{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .owner-state{ font-size:12.5px; color:var(--ink-soft); }
+  /* No owner means nobody can edit the profile — worth noticing at a glance. */
+  .owner-state[data-empty]{ color:#9A6700; font-weight:700; }
+  .owner-actions{ display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+  .owner-input{
+    flex:1; min-width:190px; padding:8px 12px; border-radius:var(--radius-md);
+    border:1.5px solid var(--line); font-size:13px; background:#fff; color:var(--ink);
+  }
+  .owner-input:focus{ border-color:var(--primary); outline:none; box-shadow:0 0 0 3px var(--primary-soft); }
+  .owner-save{ padding:8px 14px; border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary); font-weight:800; font-size:12.5px; white-space:nowrap; }
+  .owner-save:hover:not(:disabled){ background:var(--primary); color:#fff; }
+  .owner-clear{ padding:8px 12px; border-radius:var(--radius-pill); background:var(--bg-soft); color:var(--ink-soft); font-weight:700; font-size:12.5px; white-space:nowrap; }
+  .owner-clear:hover:not(:disabled){ background:var(--accent-soft); color:#B8323C; }
+  .owner-pick button:disabled,.owner-input:disabled{ opacity:.55; cursor:default; }
   .featured-chip{ display:inline-block; margin-inline-start:6px; padding:2px 8px; border-radius:var(--radius-pill); background:#FFF4DB; color:#9A6700; font-size:11.5px; font-weight:800; vertical-align:middle; }
   .demo-note{ color:#9A6700; font-weight:700; }
 
@@ -180,6 +196,8 @@ function page({ title, body, extraHead = '', wide = false }) {
     .profile-row{ gap:10px; padding:10px; }
     .profile-thumb{ width:48px; height:48px; font-size:22px; }
     .profile-meta{ font-size:12px; }
+    /* 16px keeps the phone from zooming in when the field is focused */
+    .owner-input{ font-size:16px; min-width:0; flex-basis:100%; }
     .profiles-filters button{ padding:10px 14px; }
     /* Too narrow to hug the labels — share the width out instead */
     .admin-tabs{ display:flex; width:auto; gap:2px; padding:4px; }

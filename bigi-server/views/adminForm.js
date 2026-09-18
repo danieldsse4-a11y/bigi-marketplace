@@ -81,6 +81,12 @@ function createFormPage({ adminEmail, error, values = {} } = {}) {
           <input id="contactEmail" name="contactEmail" type="email" value="${v('contactEmail')}" placeholder="contact@business.co.il">
         </div>
 
+        <div class="form-field">
+          <label for="ownerEmail">אימייל בעל העסק (לא חובה)</label>
+          <input id="ownerEmail" name="ownerEmail" type="email" dir="ltr" autocomplete="off" value="${v('ownerEmail')}" placeholder="owner@business.co.il">
+          <div class="field-hint">השאירו ריק לפרופיל דמו. אם בעל העסק כבר רשום באתר, הזינו את האימייל שלו — והוא יוכל לערוך את הפרופיל בעצמו. אפשר גם לשייך אחר כך מתוך "כל הפרופילים".</div>
+        </div>
+
         <div class="form-field" id="extras-editor" data-initial="${escapeHtml(JSON.stringify(initialExtras))}"></div>
         <input type="hidden" name="packages" id="packages-json">
         <input type="hidden" name="socialLinks" id="social-links-json">
