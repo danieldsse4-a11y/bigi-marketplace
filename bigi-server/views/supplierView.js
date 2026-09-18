@@ -21,6 +21,7 @@ function supplierViewPage(supplier, { baseUrl }) {
     backgroundImage, productImages, video,
   } = supplier;
   const packages = supplier.packages || [];
+  const logo = supplier.logo || null;
 
   const categoryLabel = categoryById(category)?.name || category;
   // Link previews (WhatsApp etc.) need absolute image URLs; local-dev uploads are relative.
@@ -113,6 +114,13 @@ function supplierViewPage(supplier, { baseUrl }) {
   .js .tab-panel{ display:none; }
   .js .tab-panel.active{ display:block; }
   .tab-empty{ color:var(--muted); font-size:14px; text-align:center; padding:18px 0; }
+  /* The logo sits on a white plate so a transparent or dark logo reads on the photo */
+  .profile-hero-brand{ display:flex; align-items:center; gap:16px; }
+  .profile-hero-brand h1{ min-width:0; overflow-wrap:anywhere; }
+  .profile-logo{
+    width:72px; height:72px; flex-shrink:0; object-fit:contain; background:#fff;
+    border-radius:18px; padding:6px; box-shadow:0 8px 24px rgba(10,8,24,0.35);
+  }
   .social-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .social-btn{
     display:inline-flex; align-items:center; min-height:40px; padding:9px 16px; max-width:100%;
@@ -131,6 +139,8 @@ function supplierViewPage(supplier, { baseUrl }) {
   .package-card li{ padding-inline-start:22px; position:relative; }
   .package-card li::before{ content:"✓"; position:absolute; inset-inline-start:0; color:var(--success); font-weight:800; }
   @media (max-width:760px){
+    .profile-hero-brand{ gap:12px; }
+    .profile-logo{ width:56px; height:56px; border-radius:14px; padding:5px; }
     .js .profile-tabs{ padding:12px 14px 0; gap:6px; }
     .profile-tab{ padding:8px 12px; font-size:13.5px; }
     .supplier-section{ padding:20px 18px; }
@@ -159,7 +169,10 @@ function supplierViewPage(supplier, { baseUrl }) {
 <section class="profile-hero">
   <div class="wrap profile-hero-inner">
     <div>
-      <h1>${escapeHtml(name)}</h1>
+      <div class="profile-hero-brand">
+        ${logo ? `<img class="profile-logo" src="${escapeHtml(logo)}" alt="הלוגו של ${escapeHtml(name)}" width="72" height="72">` : ''}
+        <h1>${escapeHtml(name)}</h1>
+      </div>
       <div class="profile-hero-meta">
         <span>${escapeHtml(categoryLabel)}</span>
         ${city ? `<span>📍 ${escapeHtml(city)}</span>` : ''}

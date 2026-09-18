@@ -14,12 +14,13 @@ const MAX_PACKAGES = 6;
 const MAX_PACKAGE_ITEMS = 12;
 const MAX_PRICE = 1000000;
 const MAX_SOCIAL_LINKS = 6;
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 2 },
+  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 },
   fileFilter(req, file, cb) {
     const allowed = file.fieldname === 'video' ? VIDEO_MIME : IMAGE_MIME;
     if (!allowed.has(file.mimetype)) {
@@ -32,12 +33,13 @@ const upload = multer({
 }).fields([
   { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
   { name: 'backgroundImage', maxCount: 1 },
+  { name: 'logo', maxCount: 1 },
   { name: 'video', maxCount: 1 },
 ]);
 
 function uploadErrorMessage(err) {
   if (err.code === 'LIMIT_FILE_SIZE') return 'הקובץ גדול מדי — סרטון עד 45MB ותמונה עד 5MB.';
-  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר, תמונת רקע וסרטון אחד.`;
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר, תמונת רקע, לוגו וסרטון אחד.`;
   return err.message;
 }
 
@@ -63,6 +65,7 @@ function readForm(req) {
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     productFiles: req.files?.productImages || [],
     backgroundFile: req.files?.backgroundImage?.[0],
+    logoFile: req.files?.logo?.[0],
     videoFile: req.files?.video?.[0],
   };
 }
@@ -205,6 +208,7 @@ function validateForm(form) {
   if (!form.backgroundFile) return 'יש להעלות תמונת רקע לפרופיל.';
   const oversizedImage = [...form.productFiles, form.backgroundFile].find((file) => file && file.size > MAX_IMAGE_BYTES);
   if (oversizedImage) return 'אחת התמונות גדולה מדי — עד 5MB לתמונה.';
+  if (form.logoFile && form.logoFile.size > MAX_LOGO_BYTES) return 'הלוגו גדול מדי — עד 2MB.';
   if (form.videoFile && form.videoLink) return 'יש לבחור סרטון להעלאה או להדביק קישור — לא את שניהם.';
   const normalizedLink = normalizeVideoLink(form.videoLink);
   if (normalizedLink?.error) return normalizedLink.error;
@@ -224,6 +228,7 @@ function linkFields(form) {
 async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
   const id = crypto.randomUUID();
   const backgroundImage = await storage.saveImage(id, form.backgroundFile);
+  const logo = form.logoFile ? await storage.saveImage(id, form.logoFile) : null;
   const productImages = [];
   for (const [i, file] of form.productFiles.entries()) {
     productImages.push({
@@ -244,6 +249,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
     contactEmail: form.contactEmail,
     ...linkFields(form),
     packages: parseExtras(form).packages,
+    logo,
     backgroundImage,
     productImages,
     video,
@@ -257,7 +263,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
 }
 
 module.exports = {
-  MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS,
+  MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS, MAX_LOGO_BYTES,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };

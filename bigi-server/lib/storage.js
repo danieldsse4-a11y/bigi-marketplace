@@ -117,6 +117,34 @@ async function saveVideo(supplierId, file) {
   return supabase.storage.from(VIDEOS_BUCKET).getPublicUrl(objectPath).data.publicUrl;
 }
 
+// Removes one previously saved image, given the URL saveImage returned. It
+// only ever touches files inside a supplier's own folder, and never throws:
+// an old logo left behind must not turn a successful edit into an error.
+async function deleteImageByUrl(url) {
+  try {
+    const text = String(url || '');
+    const local = text.match(/^\/uploads\/suppliers\/([\w-]+)\/([\w.-]+)$/);
+    if (!USE_SUPABASE) {
+      if (!local || local[2].includes('..')) return false;
+      const file = path.join(LOCAL_UPLOADS_DIR, 'suppliers', local[1], local[2]);
+      if (!fs.existsSync(file)) return false;
+      fs.rmSync(file, { force: true });
+      return true;
+    }
+    const marker = `/${IMAGES_BUCKET}/suppliers/`;
+    const at = text.indexOf(marker);
+    if (at === -1) return false;
+    const objectPath = text.slice(at + IMAGES_BUCKET.length + 2).split('?')[0];
+    if (!/^suppliers\/[\w-]+\/[\w.-]+$/.test(objectPath) || objectPath.includes('..')) return false;
+    const { error } = await supabase.storage.from(IMAGES_BUCKET).remove([objectPath]);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    console.error('Could not delete an image:', err.message);
+    return false;
+  }
+}
+
 // Removes every photo belonging to one supplier. Returns how many were
 // deleted. Never throws: the profile is already gone from the database by the
 // time this runs, and leftover files must not turn that into an error.
@@ -154,5 +182,6 @@ module.exports = {
   writeDb,
   saveImage,
   saveVideo,
+  deleteImageByUrl,
   deleteSupplierImages,
 };

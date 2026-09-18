@@ -137,6 +137,7 @@ function ownProfile(db, userId) {
     contactEmail: s.contactEmail || '',
     socialLinks: socialLinksOf(s),
     packages: s.packages || [],
+    logo: s.logo || null,
     backgroundImage: s.backgroundImage,
     productImages: s.productImages,
     video: s.video || null,

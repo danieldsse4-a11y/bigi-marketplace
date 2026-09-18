@@ -992,6 +992,7 @@
     for(let i = 0; i < MIN_PRODUCT_IMAGES; i++) addRow(false);
     enhanceFileInput($('#sf-background'));
     enhanceFileInput($('#sf-video'), 'בחרו סרטון', 'לא נבחר סרטון');
+    enhanceFileInput($('#sf-logo'), 'בחרו לוגו', 'לא נבחר לוגו');
 
     const videoInput = $('#sf-video');
     const videoLink = $('#sf-video-link');
@@ -1069,6 +1070,7 @@
         ['מייל ליצירת קשר', p.contactEmail],
         ['קישורים', (p.socialLinks || []).map(l => l.label).join(', ')],
         ['חבילות', (p.packages || []).length ? `${p.packages.length}` : ''],
+        ['לוגו', p.logo ? 'הועלה' : ''],
         ['נשלח בתאריך', new Date(p.createdAt).toLocaleDateString('he-IL')],
       ];
       $('#dash-details').innerHTML = details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="muted">לא הוזן</span>'}</dd></div>`).join('');
