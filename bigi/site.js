@@ -890,7 +890,7 @@
       videoInput.addEventListener('change', () => {
         const picked = videoInput.files && videoInput.files.length > 0;
         videoLink.disabled = picked;
-        videoLink.placeholder = picked ? 'הועלה קובץ — הקישור לא נדרש' : 'או הדביקו קישור לסרטון: https://youtube.com/...';
+        videoLink.placeholder = picked ? 'הועלה קובץ — הקישור לא נדרש' : 'או הדביקו כאן קישור לסרטון';
         if(picked) videoLink.value = '';
       });
       videoLink.addEventListener('input', () => {
