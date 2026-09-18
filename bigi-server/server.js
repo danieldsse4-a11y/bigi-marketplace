@@ -590,6 +590,8 @@ app.get('/supplier/view/:uuid', requireDb, (req, res) => {
     baseUrl: BASE_URL,
     reviews: reviews.reviewsFor(data, supplier.id),
     viewer: user ? { id: user.id, role: user.role } : null,
+    // Only the supplier who owns this profile is offered the edit link.
+    isOwner: Boolean(user && supplier.ownerUserId && supplier.ownerUserId === user.id),
   }));
 });
 

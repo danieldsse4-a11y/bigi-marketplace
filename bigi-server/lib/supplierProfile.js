@@ -7,7 +7,7 @@ const storage = require('./storage');
 const { categoryById, CITIES } = require('./siteData');
 
 const MIN_PRODUCT_IMAGES = 5;
-const MAX_PRODUCT_IMAGES = 10;
+const MAX_PRODUCT_IMAGES = 30;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 45 * 1024 * 1024;
 const MAX_PACKAGES = 6;
@@ -15,6 +15,10 @@ const MAX_PACKAGE_ITEMS = 12;
 const MAX_PRICE = 1000000;
 const MAX_SOCIAL_LINKS = 6;
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+// Every file is held in memory until it reaches storage, so 30 photos plus a
+// video could use more RAM than the whole instance has. The size of the
+// submission is checked from its header, before a single byte is read.
+const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
@@ -45,7 +49,11 @@ function uploadErrorMessage(err) {
 
 // Express middleware: parses the multipart form; on failure calls onError(req, res, message).
 function parseForm(onError) {
-  return (req, res, next) => upload(req, res, (err) => (err ? onError(req, res, uploadErrorMessage(err)) : next()));
+  const tooBig = `סך כל הקבצים בשליחה אחת גדול מדי (עד ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB). העלו פחות תמונות, או תמונות קטנות יותר.`;
+  return (req, res, next) => {
+    if (Number(req.headers['content-length'] || 0) > MAX_UPLOAD_BYTES) return onError(req, res, tooBig);
+    upload(req, res, (err) => (err ? onError(req, res, uploadErrorMessage(err)) : next()));
+  };
 }
 
 // Editing takes a new logo and nothing else, so nothing else is read from the

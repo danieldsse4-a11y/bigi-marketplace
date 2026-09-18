@@ -725,7 +725,7 @@
         <div class="package-price">₪${p.price.toLocaleString('he-IL')}<span> / לאירוע</span></div>
         <ul>${p.items.map(it=>`<li>${it}</li>`).join('')}</ul>
         <a class="btn ${i===1?'btn-primary':'btn-secondary'} btn-block" target="_blank" rel="noopener"
-           href="${esc(whatsappLink(v, `שלום ${v.name}, מצאתי אתכם בספקים קלאב ואני מעוניין/ת ב${p.name} (${formatPrice(p.price)}) לאירוע שלי. מה הזמינות שלכם?`))}">בחרו חבילה בוואטסאפ</a>
+           href="${esc(whatsappLink(v))}">צרו קשר בוואטסאפ</a>
       </div>
     `).join('');
 
@@ -810,7 +810,7 @@
 
   /* ---------- Supplier sign-up form (same fields as the admin "create profile" form) ---------- */
   const MIN_PRODUCT_IMAGES = 5;
-  const MAX_PRODUCT_IMAGES = 10;
+  const MAX_PRODUCT_IMAGES = 30;
 
   /* The browser's own file control says "Choose File / No file chosen" in
      English and reads left-to-right. The input stays in the page (so the

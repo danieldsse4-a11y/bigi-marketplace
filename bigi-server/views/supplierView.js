@@ -21,6 +21,10 @@ function waLink(phone, text) {
 
 const priceText = (price) => (price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר בהתאם להצעה');
 
+// One wording for every WhatsApp button on the page. It names the site so the
+// supplier knows where the enquiry came from, and nothing else.
+const enquiryText = (name) => `שלום ${name}, מצאתי אתכם ב${SITE_NAME} ורציתי לשאול לגבי זמינות ומחיר.`;
+
 const whatsappIcon = '<svg viewBox="0 0 32 32" fill="currentColor" width="17" height="17" aria-hidden="true"><path d="M16.03 3C9.13 3 3.53 8.6 3.53 15.5c0 2.36.65 4.56 1.78 6.45L3 29l7.24-2.26a12.4 12.4 0 0 0 5.79 1.44h.01c6.9 0 12.5-5.6 12.5-12.5S22.93 3 16.03 3zm0 22.6h-.01a10.4 10.4 0 0 1-5.3-1.45l-.38-.22-4.3 1.34 1.37-4.2-.25-.4a10.32 10.32 0 0 1-1.6-5.57c0-5.75 4.68-10.43 10.44-10.43 2.79 0 5.4 1.09 7.38 3.06a10.35 10.35 0 0 1 3.05 7.38c0 5.75-4.68 10.43-10.4 10.43zm5.72-7.82c-.31-.16-1.86-.92-2.15-1.02-.29-.1-.5-.16-.71.16-.21.31-.82 1.02-1 1.23-.19.21-.37.23-.68.08-.31-.16-1.32-.49-2.51-1.56-.93-.83-1.56-1.85-1.74-2.16-.18-.31-.02-.48.14-.63.14-.14.31-.37.47-.55.16-.19.21-.31.31-.52.1-.21.05-.39-.02-.55-.08-.16-.71-1.72-.98-2.36-.26-.62-.52-.54-.71-.55h-.6c-.21 0-.55.08-.84.39-.29.31-1.1 1.08-1.1 2.62 0 1.54 1.13 3.03 1.29 3.24.16.21 2.22 3.39 5.38 4.75.75.33 1.34.52 1.8.66.76.24 1.44.21 1.99.13.61-.09 1.86-.76 2.12-1.5.26-.73.26-1.36.18-1.5-.08-.13-.29-.21-.6-.37z"/></svg>';
 
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
@@ -70,7 +74,7 @@ function reviewsPanel(supplier, list, viewer) {
         </li>`).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
 }
 
-function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
+function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOwner = false }) {
   const {
     name, category, city, description, phone, contactEmail,
     backgroundImage, productImages, video,
@@ -93,7 +97,7 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
   const shareDescription = description
     ? (description.length > 150 ? `${description.slice(0, 150)}…` : description)
     : `${shareSummary} — בביגי ספקים`;
-  const whatsapp = waLink(phone, `שלום ${name}, מצאתי אתכם ב${SITE_NAME} ורציתי לשאול לגבי זמינות ומחיר.`);
+  const whatsapp = waLink(phone, enquiryText(name));
   const socialLinks = socialLinksOf(supplier);
 
   return `<!DOCTYPE html>
@@ -183,6 +187,10 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
     width:72px; height:72px; flex-shrink:0; object-fit:contain; background:#fff;
     border-radius:18px; padding:6px; box-shadow:0 8px 24px rgba(10,8,24,0.35);
   }
+  /* Only the owner sees these, over the dark hero photo */
+  .owner-edit-btn{ background:rgba(255,255,255,0.94); color:var(--primary); }
+  .owner-edit-btn:hover{ background:#fff; transform:translateY(-3px); box-shadow:0 12px 26px rgba(10,8,24,0.35); }
+  .owner-note{ margin-top:10px; font-size:12.5px; color:rgba(255,255,255,0.85); }
   .review-avg{ font-size:13.5px; font-weight:700; color:var(--ink-soft); margin-inline-start:8px; }
   .review-star-on, .star.on, .review-stars{ color:#F5A623; }
   .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
@@ -281,10 +289,12 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
         <span>${escapeHtml(categoryLabel)}</span>
         ${city ? `<span>📍 ${escapeHtml(city)}</span>` : ''}
       </div>
-      ${whatsapp ? `
+      ${(whatsapp || isOwner) ? `
       <div class="profile-hero-actions">
-        <a href="${whatsapp}" target="_blank" rel="noopener" class="btn whatsapp-cta">צרו קשר בוואטסאפ</a>
-      </div>` : ''}
+        ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noopener" class="btn whatsapp-cta">צרו קשר בוואטסאפ</a>` : ''}
+        ${isOwner ? '<a href="/edit-profile.html" class="btn owner-edit-btn">✏️ עריכת הפרופיל שלי</a>' : ''}
+      </div>
+      ${isOwner ? '<p class="owner-note">הכפתור הזה מופיע רק לכם, לא ללקוחות.</p>' : ''}` : ''}
     </div>
   </div>
 </section>
@@ -316,13 +326,15 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null }) {
     <div class="supplier-section tab-panel" id="panel-packages" role="tabpanel" aria-labelledby="tab-packages">
       <h3>חבילות</h3>
       <div class="package-grid">${packages.map((p) => {
-        const enquiry = waLink(phone, `שלום ${name}, מצאתי אתכם ב${SITE_NAME} ואני מעוניין/ת ב"${p.name}" (${priceText(p.price)}) לאירוע שלי. מה הזמינות שלכם?`);
+        // Deliberately the same general enquiry as the header button: the
+        // message does not name the package or its price.
+        const enquiry = waLink(phone, enquiryText(name));
         return `
         <article class="package-card">
           <h4>${escapeHtml(p.name)}</h4>
           <div class="package-price${p.price ? '' : ' is-quote'}">${escapeHtml(priceText(p.price))}</div>
           ${p.items && p.items.length ? `<ul>${p.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
-          ${enquiry ? `<a class="btn whatsapp-cta btn-block package-cta" href="${enquiry}" target="_blank" rel="noopener">${whatsappIcon} בחרו חבילה בוואטסאפ</a>` : ''}
+          ${enquiry ? `<a class="btn whatsapp-cta btn-block package-cta" href="${enquiry}" target="_blank" rel="noopener">${whatsappIcon} צרו קשר בוואטסאפ</a>` : ''}
         </article>`;
       }).join('')}</div>
     </div>`}
