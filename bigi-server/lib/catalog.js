@@ -3,6 +3,7 @@
 // sample suppliers that ship in bigi/data.js.
 
 const { CONST_NAMES, SITE_DATA, SAMPLE_VENDORS, categoryById } = require('./siteData');
+const { socialLinksOf } = require('./supplierProfile');
 
 const SAMPLE_KEY_PREFIX = 'sample-';
 
@@ -134,7 +135,7 @@ function ownProfile(db, userId) {
     description: s.description || '',
     phone: s.phone || '',
     contactEmail: s.contactEmail || '',
-    links: s.links || '',
+    socialLinks: socialLinksOf(s),
     packages: s.packages || [],
     backgroundImage: s.backgroundImage,
     productImages: s.productImages,

@@ -843,9 +843,10 @@
      same. Rows carry no `name`, so nothing is submitted by accident: collect()
      returns plain data and the caller sends it as one JSON field. */
   const MAX_PACKAGES = 6;
+  const MAX_SOCIAL_LINKS = 6;
 
   function mountExtrasEditor(root, initial){
-    if(!root) return { collect: () => ({ packages: [] }) };
+    if(!root) return { collect: () => ({ packages: [], socialLinks: [] }) };
     initial = initial || {};
 
     root.innerHTML = `
@@ -854,10 +855,18 @@
         <div class="field-hint">אפשר להוסיף עד ${MAX_PACKAGES} חבילות. המחיר לא חובה — בלי מחיר יופיע ללקוחות "מחיר בהתאם להצעה", ואפשר לעדכן אותו בכל רגע דרך עריכת הפרופיל.</div>
         <div class="extras-rows" data-rows="packages"></div>
         <button type="button" class="btn btn-secondary btn-sm" data-add="packages">+ הוספת חבילה</button>
+      </div>
+      <div class="extras-block">
+        <label class="extras-title">קישורים ורשתות חברתיות (לא חובה)</label>
+        <div class="field-hint">כל קישור יופיע בפרופיל ככפתור עם השם שתבחרו, למשל "אינסטגרם" או "האתר שלנו". אפשר להוסיף עד ${MAX_SOCIAL_LINKS}.</div>
+        <div class="extras-rows" data-rows="links"></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-add="links">+ הוספת קישור</button>
       </div>`;
 
     const pkgRows = $('[data-rows="packages"]', root);
     const pkgAdd = $('[data-add="packages"]', root);
+    const linkRows = $('[data-rows="links"]', root);
+    const linkAdd = $('[data-add="links"]', root);
 
     function renumber(){
       $$('.pkg-row', pkgRows).forEach((row, i) => { $('.extras-row-title', row).textContent = `חבילה ${i + 1}`; });
@@ -888,8 +897,38 @@
       const remove = e.target.closest('.extras-remove');
       if(remove){ remove.closest('.pkg-row').remove(); renumber(); }
     });
+    function renumberLinks(){
+      $$('.link-row', linkRows).forEach((row, i) => { $('.extras-row-title', row).textContent = `קישור ${i + 1}`; });
+      linkAdd.hidden = $$('.link-row', linkRows).length >= MAX_SOCIAL_LINKS;
+    }
+
+    function addLink(link){
+      link = link || {};
+      const row = document.createElement('div');
+      row.className = 'extras-row link-row';
+      row.innerHTML = `
+        <div class="extras-row-head">
+          <strong class="extras-row-title"></strong>
+          <button type="button" class="extras-remove" aria-label="הסרת הקישור">✕</button>
+        </div>
+        <input type="text" class="link-label" maxlength="30" placeholder="שם הכפתור, למשל: אינסטגרם">
+        <input type="text" class="link-url" maxlength="300" inputmode="url" dir="ltr" placeholder="https://instagram.com/העסק-שלכם">`;
+      $('.link-label', row).value = link.label || '';
+      $('.link-url', row).value = link.url || '';
+      linkRows.appendChild(row);
+      renumberLinks();
+    }
+
+    linkAdd.addEventListener('click', () => { if($$('.link-row', linkRows).length < MAX_SOCIAL_LINKS) addLink(); });
+    linkRows.addEventListener('click', (e) => {
+      const remove = e.target.closest('.extras-remove');
+      if(remove){ remove.closest('.link-row').remove(); renumberLinks(); }
+    });
+
     (initial.packages || []).forEach(addPackage);
+    (initial.socialLinks || []).forEach(l => addLink({ label: l.label, url: l.url || '' }));
     renumber();
+    renumberLinks();
 
     return {
       collect(){
@@ -898,7 +937,11 @@
           price: $('.pkg-price', row).value.trim(),
           items: $('.pkg-items', row).value.split('\n').map(s => s.trim()).filter(Boolean),
         })).filter(p => p.name || p.price !== '' || p.items.length);
-        return { packages };
+        const socialLinks = $$('.link-row', linkRows).map(row => ({
+          label: $('.link-label', row).value.trim(),
+          url: $('.link-url', row).value.trim(),
+        })).filter(l => l.label || l.url);
+        return { packages, socialLinks };
       }
     };
   }
@@ -977,7 +1020,9 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'שולח ומעלה תמונות…';
       const formData = new FormData(form);
-      formData.set('packages', JSON.stringify(extrasEditor.collect().packages));
+      const extras = extrasEditor.collect();
+      formData.set('packages', JSON.stringify(extras.packages));
+      formData.set('socialLinks', JSON.stringify(extras.socialLinks));
       const { ok, data } = await api('/api/supplier/profile', { method: 'POST', formData });
       submitBtn.disabled = false;
       submitBtn.textContent = 'שליחת הפרופיל לאישור';
@@ -1022,7 +1067,8 @@
       const details = [
         ['טלפון לוואטסאפ', p.phone],
         ['מייל ליצירת קשר', p.contactEmail],
-        ['קישורים', p.links],
+        ['קישורים', (p.socialLinks || []).map(l => l.label).join(', ')],
+        ['חבילות', (p.packages || []).length ? `${p.packages.length}` : ''],
         ['נשלח בתאריך', new Date(p.createdAt).toLocaleDateString('he-IL')],
       ];
       $('#dash-details').innerHTML = details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v ? esc(v) : '<span class="muted">לא הוזן</span>'}</dd></div>`).join('');

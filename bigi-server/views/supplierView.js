@@ -1,6 +1,7 @@
 const { escapeHtml } = require('./layout');
 const { categoryById } = require('../lib/siteData');
 const { normalizePhone } = require('../lib/catalog');
+const { socialLinksOf } = require('../lib/supplierProfile');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
 // needs the real site header (same markup as bigi/vendor.html) plus a
@@ -16,7 +17,7 @@ function waLink(phone, name) {
 
 function supplierViewPage(supplier, { baseUrl }) {
   const {
-    name, category, city, description, phone, contactEmail, links,
+    name, category, city, description, phone, contactEmail,
     backgroundImage, productImages, video,
   } = supplier;
   const packages = supplier.packages || [];
@@ -30,11 +31,7 @@ function supplierViewPage(supplier, { baseUrl }) {
     ? (description.length > 150 ? `${description.slice(0, 150)}…` : description)
     : `${shareSummary} — בביגי ספקים`;
   const whatsapp = waLink(phone, name);
-  // Only http(s) links are clickable; a bare "instagram.com/x" gets https:// added.
-  const linkHref = !links ? null
-    : /^https?:\/\//i.test(links) ? links
-    : /^[a-z][a-z0-9+.-]*:/i.test(links) ? null
-    : `https://${links}`;
+  const socialLinks = socialLinksOf(supplier);
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -116,6 +113,15 @@ function supplierViewPage(supplier, { baseUrl }) {
   .js .tab-panel{ display:none; }
   .js .tab-panel.active{ display:block; }
   .tab-empty{ color:var(--muted); font-size:14px; text-align:center; padding:18px 0; }
+  .social-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .social-btn{
+    display:inline-flex; align-items:center; min-height:40px; padding:9px 16px; max-width:100%;
+    border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary);
+    font-weight:700; font-size:14px; overflow-wrap:anywhere;
+    transition:background .25s var(--ease-out), color .25s var(--ease-out);
+  }
+  a.social-btn:hover{ background:var(--primary); color:#fff; }
+  .social-btn.is-text{ background:var(--bg-soft); color:var(--ink-soft); }
   .package-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
   .package-card{ text-align:start; border:1.5px solid var(--line); border-radius:var(--radius-md); padding:18px; background:#fff; }
   .package-card h4{ font-size:16px; margin-bottom:6px; }
@@ -176,15 +182,18 @@ function supplierViewPage(supplier, { baseUrl }) {
     </div>
 
     <div class="supplier-section tab-panel active" id="panel-about" role="tabpanel" aria-labelledby="tab-about">
-      ${(description || phone || contactEmail || links) ? `
-      ${description ? `<p style="font-size:15px; line-height:1.7; color:var(--ink-soft); margin-bottom:${(phone||contactEmail||links) ? '18px' : '0'};">${escapeHtml(description)}</p>` : ''}
-      ${(phone || contactEmail || links) ? `
+      ${(description || phone || contactEmail || socialLinks.length) ? `
+      ${description ? `<p style="font-size:15px; line-height:1.7; color:var(--ink-soft); margin-bottom:${(phone||contactEmail||socialLinks.length) ? '18px' : '0'};">${escapeHtml(description)}</p>` : ''}
+      ${(phone || contactEmail) ? `
       <div class="supplier-contact" style="display:flex; flex-direction:column; gap:8px; font-size:14px;">
         ${phone ? `<div>📞 <a href="tel:${escapeHtml(phone)}" style="color:var(--primary); font-weight:700;">${escapeHtml(phone)}</a></div>` : ''}
         ${contactEmail ? `<div>✉️ <a href="mailto:${escapeHtml(contactEmail)}" style="color:var(--primary); font-weight:700;">${escapeHtml(contactEmail)}</a></div>` : ''}
-        ${links ? `<div>🔗 ${linkHref
-          ? `<a href="${escapeHtml(linkHref)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:700;">${escapeHtml(links)}</a>`
-          : `<span style="font-weight:700;">${escapeHtml(links)}</span>`}</div>` : ''}
+      </div>` : ''}
+      ${socialLinks.length ? `
+      <div class="social-row" style="margin-top:${(phone || contactEmail) ? '16px' : '0'};">
+        ${socialLinks.map((l) => l.url
+          ? `<a class="social-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a>`
+          : `<span class="social-btn is-text">${escapeHtml(l.label)}</span>`).join('')}
       </div>` : ''}` : '<p class="tab-empty">בעל העסק עדיין לא הוסיף פרטים.</p>'}
     </div>
 

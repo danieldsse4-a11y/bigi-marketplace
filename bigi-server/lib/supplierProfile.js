@@ -13,6 +13,7 @@ const MAX_VIDEO_BYTES = 45 * 1024 * 1024;
 const MAX_PACKAGES = 6;
 const MAX_PACKAGE_ITEMS = 12;
 const MAX_PRICE = 1000000;
+const MAX_SOCIAL_LINKS = 6;
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
@@ -57,6 +58,7 @@ function readForm(req) {
     contactEmail: text('contactEmail'),
     links: text('links'),
     packages: text('packages'),
+    socialLinks: text('socialLinks'),
     videoLink: text('videoLink'),
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     productFiles: req.files?.productImages || [],
@@ -135,11 +137,59 @@ function normalizePackages(raw) {
   return { value };
 }
 
+// Only http(s) addresses are ever kept, so a link can never run script.
+// A bare "instagram.com/x" gets https:// added. Returns the address, or null.
+function normalizeUrl(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value || value.length > 300) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+  let url;
+  try { url = new URL(withScheme); } catch { return null; }
+  if (!['http:', 'https:'].includes(url.protocol)) return null;
+  if (!url.hostname.includes('.')) return null;
+  return url.href;
+}
+
+function normalizeSocialLinks(raw) {
+  const list = parseJsonArray(raw, 'הקישורים');
+  if (list.error) return list;
+  if (list.value.length > MAX_SOCIAL_LINKS) return { error: `אפשר להוסיף עד ${MAX_SOCIAL_LINKS} קישורים.` };
+
+  const value = [];
+  for (const [i, entry] of list.value.entries()) {
+    const label = `קישור ${i + 1}`;
+    if (!entry || typeof entry !== 'object') return { error: `${label}: הנתונים לא תקינים.` };
+
+    const name = String(entry.label ?? '').trim();
+    if (!name) return { error: `${label}: יש לתת שם לכפתור.` };
+    if (name.length > 30) return { error: `${label}: השם ארוך מדי (עד 30 תווים).` };
+
+    const url = normalizeUrl(entry.url);
+    if (!url) return { error: `${label}: הכתובת אינה תקינה — היא צריכה להתחיל ב־http או https.` };
+
+    value.push({ label: name, url });
+  }
+  return { value };
+}
+
+// A profile saved before link buttons existed has one free-text `links`
+// string. It shows up as a button (or plain text when it is not an address),
+// so nothing an existing supplier entered is lost.
+function socialLinksOf(supplier) {
+  if (Array.isArray(supplier.socialLinks)) return supplier.socialLinks;
+  const legacy = String(supplier.links || '').trim();
+  if (!legacy) return [];
+  const url = normalizeUrl(legacy);
+  return [url ? { label: 'קישור', url } : { label: legacy, url: null }];
+}
+
 // Everything the form sends as structured data, checked in one place.
 function parseExtras(form) {
   const packages = normalizePackages(form.packages);
   if (packages.error) return { error: packages.error };
-  return { packages: packages.value };
+  const socialLinks = normalizeSocialLinks(form.socialLinks);
+  if (socialLinks.error) return { error: socialLinks.error };
+  return { packages: packages.value, socialLinks: socialLinks.value };
 }
 
 // Returns an error message for the form, or null when it's valid.
@@ -159,6 +209,15 @@ function validateForm(form) {
   const normalizedLink = normalizeVideoLink(form.videoLink);
   if (normalizedLink?.error) return normalizedLink.error;
   return parseExtras(form).error || null;
+}
+
+// The admin "create profile" page still has the old single links box, so a
+// value there becomes one button (or stays plain text when it is not an address).
+function linkFields(form) {
+  const socialLinks = parseExtras(form).socialLinks;
+  if (socialLinks.length || !form.links) return { socialLinks, links: '' };
+  const url = normalizeUrl(form.links);
+  return url ? { socialLinks: [{ label: 'קישור', url }], links: '' } : { socialLinks: [], links: form.links };
 }
 
 // Uploads the photos and returns the new (demo) supplier record.
@@ -183,7 +242,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
     description: form.description,
     phone: form.phone,
     contactEmail: form.contactEmail,
-    links: form.links,
+    ...linkFields(form),
     packages: parseExtras(form).packages,
     backgroundImage,
     productImages,
@@ -198,6 +257,7 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
 }
 
 module.exports = {
-  MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES,
-  parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink, normalizePackages,
+  MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS,
+  parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
+  normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };
