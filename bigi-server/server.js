@@ -367,7 +367,44 @@ function imageInUse(data, url, exceptId) {
     s.backgroundImage === url || s.logo === url || (s.video && s.video.url === url)
     || (s.productImages || []).some((p) => p.file === url)
     || supplierForm.equipmentFiles(s).includes(url)
+    || supplierForm.serviceFiles(s).includes(url)
   ));
+}
+
+// The services as they will be stored, like equipmentPlan: kept photos are
+// looked up in the profile's current services, new files get their uploaded
+// addresses, and a reused photo must be one of `own`. Every service ends up
+// with 1–3 different photos. Returns { services, removed } or { error }.
+function servicesPlan(current, services, uploads, own) {
+  const existing = new Map();
+  for (const svc of current) for (const p of svc.photos) existing.set(p.id, p);
+  const ids = new Set(current.map((svc) => svc.id));
+  const seenServices = new Set();
+  const seenPhotos = new Set();
+  const newId = (prefix) => `${prefix}${crypto.randomBytes(4).toString('hex')}`;
+  const next = [];
+  for (const svc of services) {
+    const id = svc.id && ids.has(svc.id) && !seenServices.has(svc.id) ? svc.id : newId('s');
+    seenServices.add(id);
+    const photos = [];
+    for (const p of svc.photos) {
+      if (p.id != null) {
+        const found = existing.get(p.id);
+        if (found && !seenPhotos.has(p.id)) { seenPhotos.add(p.id); photos.push(found); }
+      } else if (p.file != null) {
+        photos.push(uploads[p.file]);
+      } else {
+        if (!own.has(p.url)) return { error: `"${svc.name}": אחת התמונות שנבחרו לא שייכת לפרופיל הזה.` };
+        photos.push({ id: newId('p'), url: p.url });
+      }
+    }
+    if (!photos.length) return { error: `"${svc.name}": צריך לפחות תמונה אחת לשירות.` };
+    if (new Set(photos.map((p) => p.url)).size !== photos.length) return { error: `"${svc.name}": אותה תמונה מופיעה פעמיים בשירות.` };
+    next.push({ id, name: svc.name, description: svc.description, photos });
+  }
+  const kept = new Set(next.flatMap((svc) => svc.photos.map((p) => p.url)));
+  const removed = supplierForm.serviceFiles({ services: current }).filter((url) => !kept.has(url));
+  return { services: next, removed };
 }
 
 // The equipment section as it will be stored: kept items are looked up in the
@@ -434,6 +471,11 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
     const eq = equipmentPlan(supplierForm.equipmentOf(before), checked.equipment, pending, supplierForm.profileImages(before));
     if (eq.error) return res.status(400).json({ error: eq.error });
   }
+  if (checked.services) {
+    const pending = form.serviceFiles.map((_, i) => ({ id: `pending${i}`, url: `pending:${i}` }));
+    const sv = servicesPlan(supplierForm.servicesOf(before), checked.services, pending, supplierForm.profileImages(before));
+    if (sv.error) return res.status(400).json({ error: sv.error });
+  }
 
   const uploaded = [];
   let newLogo = null;
@@ -442,7 +484,15 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
   const added = [];
   // One stored item per equipment file, in the order the files arrived.
   const equipmentUploads = [];
+  const serviceUploads = [];
   try {
+    if (checked.services) {
+      for (const file of form.serviceFiles) {
+        const url = await storage.saveImage(id, file);
+        uploaded.push(url);
+        serviceUploads.push({ id: `p${crypto.randomBytes(4).toString('hex')}`, url });
+      }
+    }
     if (checked.equipment) {
       for (const file of form.equipmentFiles) {
         const isVideo = supplierForm.VIDEO_MIME.has(file.mimetype);
@@ -492,6 +542,11 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
       eq = equipmentPlan(supplierForm.equipmentOf(s), checked.equipment, equipmentUploads, own);
       if (eq.error) { problem = eq.error; return false; }
     }
+    let sv = null;
+    if (checked.services) {
+      sv = servicesPlan(supplierForm.servicesOf(s), checked.services, serviceUploads, own);
+      if (sv.error) { problem = sv.error; return false; }
+    }
     const oldFiles = [];
     if (newLogo || form.removeLogo) { oldFiles.push(s.logo); s.logo = newLogo || null; }
     if (newBackground) { oldFiles.push(s.backgroundImage); s.backgroundImage = newBackground; }
@@ -505,9 +560,13 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
       s.equipment = eq.groups;
       oldFiles.push(...eq.removed);
     }
+    if (sv) {
+      s.services = sv.services;
+      oldFiles.push(...sv.removed);
+    }
     // A file leaves storage only when no place on this profile (gallery,
     // background, logo, video, ציוד) and no other profile uses it any more.
-    const stillUsed = new Set([s.backgroundImage, s.logo, s.video && s.video.url, ...supplierForm.equipmentFiles(s), ...s.productImages.map((p) => p.file)]);
+    const stillUsed = new Set([s.backgroundImage, s.logo, s.video && s.video.url, ...supplierForm.equipmentFiles(s), ...supplierForm.serviceFiles(s), ...s.productImages.map((p) => p.file)]);
     removed = [...now.removed.map((p) => p.file), ...oldFiles]
       .filter((url) => url && !stillUsed.has(url) && !imageInUse(data, url, id));
     if (checked.name !== null) s.name = checked.name;

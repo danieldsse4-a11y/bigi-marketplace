@@ -1363,7 +1363,144 @@
       return null;
     }
 
+    /* מגוון השירותים שלנו: a card per service with a name, a short description
+       and 1–3 photos, uploaded or picked from the profile's photos. Works like
+       the ציוד block: nothing changes until the form is saved. */
+    const SV = { max: 12, name: 60, description: 500, photos: 3 };
+    const svRoot = $('#edit-services');
+    const addServiceBtn = $('#edit-add-service');
+    let services = [];
+    const photoCount = (s) => s.photos.length - s.removed.size + s.added.length;
+
+    function renderServices(){
+      svRoot.innerHTML = services.map((s, si) => {
+        const count = photoCount(s);
+        const full = count >= SV.photos;
+        const tile = (cls, attrs, src, label) => `
+          <div class="edit-photo ${cls}" ${attrs}>
+            <img src="${esc(src)}" alt="" loading="lazy">
+            ${label ? `<span class="edit-photo-cap">${label}</span>` : ''}
+            <button type="button" class="edit-photo-x" data-act="photo" aria-label="${cls.includes('is-removed') ? 'ביטול ההסרה' : 'הסרת התמונה'}">${cls.includes('is-removed') ? '↩' : '✕'}</button>
+          </div>`;
+        const existing = s.photos.map((p, i) => tile(s.removed.has(p.id) ? 'is-removed' : '', `data-i="${i}"`, p.url, s.removed.has(p.id) ? 'תוסר בשמירה' : ''));
+        const added = s.added.map((a, i) => tile('is-new', `data-n="${i}"`, a.thumb, a.url ? 'תמונה קיימת' : ''));
+        return `
+        <div class="edit-group edit-service" data-s="${si}">
+          <div class="edit-group-head">
+            <input type="text" class="edit-service-name" maxlength="${SV.name}" placeholder="שם השירות, למשל: הגברה לאירועים" value="${esc(s.name)}" aria-label="שם השירות">
+            <button type="button" class="edit-group-btn" data-act="up" aria-label="העברה למעלה"${si === 0 ? ' disabled' : ''}>↑</button>
+            <button type="button" class="edit-group-btn" data-act="down" aria-label="העברה למטה"${si === services.length - 1 ? ' disabled' : ''}>↓</button>
+            <button type="button" class="edit-group-btn is-delete" data-act="delete" aria-label="מחיקת השירות">✕</button>
+          </div>
+          <textarea class="edit-service-desc" maxlength="${SV.description}" rows="2" placeholder="מה הלקוח מקבל? (לא חובה)" aria-label="תיאור השירות">${esc(s.description)}</textarea>
+          <div class="edit-photos">${existing.join('')}${added.join('')}</div>
+          <div class="edit-group-actions">
+            <label class="btn btn-secondary btn-sm">📷 העלאת תמונות<input type="file" multiple accept="image/png,image/jpeg,image/webp"${full ? ' disabled' : ''}></label>
+            <button type="button" class="btn btn-ghost btn-sm" data-act="pick"${full ? ' disabled' : ''}>🖼️ בחירה מתמונות שכבר העליתי</button>
+            <span class="edit-group-count${count < 1 || count > SV.photos ? ' is-full' : ''}">${count} מתוך ${SV.photos} תמונות${count < 1 ? ' — צריך לפחות אחת' : ''}</span>
+          </div>
+        </div>`;
+      }).join('');
+      $('#edit-services-count').textContent = services.length ? `(${services.length} מתוך ${SV.max})` : '';
+      addServiceBtn.hidden = services.length >= SV.max;
+    }
+
+    const serviceOf = (el) => services[Number(el.closest('.edit-service').dataset.s)];
+    addServiceBtn.addEventListener('click', () => {
+      services.push({ id: null, name: '', description: '', photos: [], removed: new Set(), added: [] });
+      renderServices();
+      const inputs = $$('.edit-service-name', svRoot);
+      inputs[inputs.length - 1].focus();
+    });
+    svRoot.addEventListener('input', (e) => {
+      if(e.target.classList.contains('edit-service-name')) serviceOf(e.target).name = e.target.value;
+      if(e.target.classList.contains('edit-service-desc')) serviceOf(e.target).description = e.target.value;
+    });
+    svRoot.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act]');
+      if(!btn) return;
+      const si = Number(btn.closest('.edit-service').dataset.s);
+      const s = services[si];
+      const act = btn.dataset.act;
+      if(act === 'up' || act === 'down'){
+        const to = act === 'up' ? si - 1 : si + 1;
+        if(to < 0 || to >= services.length) return;
+        [services[si], services[to]] = [services[to], services[si]];
+        renderServices();
+        $(`.edit-service[data-s="${to}"] [data-act=${act}]`, svRoot).focus();
+      } else if(act === 'delete'){
+        if((s.name.trim() || photoCount(s)) && !window.confirm(`למחוק את השירות "${s.name.trim() || 'ללא שם'}"?`)) return;
+        s.added.forEach(a => { if(a.file) URL.revokeObjectURL(a.thumb); });
+        services.splice(si, 1);
+        renderServices();
+        (addServiceBtn.hidden ? $('.edit-service-name', svRoot) : addServiceBtn).focus();
+      } else if(act === 'pick'){
+        const here = new Set([
+          ...s.photos.filter(p => !s.removed.has(p.id)).map(p => p.url),
+          ...s.added.filter(a => a.url).map(a => a.url),
+        ]);
+        openPicker({ here, room: SV.photos - photoCount(s), onPick: (urls) => {
+          urls.forEach(url => s.added.push({ url, thumb: url }));
+          renderServices();
+        } });
+      } else if(act === 'photo'){
+        const photo = btn.closest('.edit-photo');
+        if(photo.dataset.n !== undefined){
+          const [gone] = s.added.splice(Number(photo.dataset.n), 1);
+          if(gone && gone.file) URL.revokeObjectURL(gone.thumb);
+        } else {
+          const p = s.photos[Number(photo.dataset.i)];
+          if(s.removed.has(p.id)) s.removed.delete(p.id);
+          else s.removed.add(p.id);
+        }
+        renderServices();
+      }
+    });
+    svRoot.addEventListener('change', (e) => {
+      if(e.target.type !== 'file') return;
+      const s = serviceOf(e.target);
+      const files = Array.from(e.target.files || []);
+      const big = files.find(f => f.size > 5 * 1024 * 1024);
+      if(big) return fail(`התמונה "${big.name}" גדולה מדי — עד 5MB לתמונה.`);
+      const room = SV.photos - photoCount(s);
+      if(files.length > room) fail(`אפשר עד ${SV.photos} תמונות לשירות — נוספו רק ${Math.max(room, 0)} מתוך ${files.length}.`);
+      files.slice(0, Math.max(room, 0)).forEach(file => s.added.push({ file, thumb: URL.createObjectURL(file) }));
+      renderServices();
+    });
+
+    function servicesProblem(){
+      const names = new Set();
+      for(const s of services){
+        const name = s.name.trim().replace(/\s+/g, ' ');
+        if(!name) return 'יש לתת שם לכל שירות.';
+        if(names.has(name)) return `השם "${name}" מופיע פעמיים — לכל שירות צריך שם משלו.`;
+        names.add(name);
+        if(photoCount(s) < 1) return `"${name}": צריך לפחות תמונה אחת לשירות.`;
+        if(photoCount(s) > SV.photos) return `"${name}": אפשר עד ${SV.photos} תמונות לשירות.`;
+      }
+      return null;
+    }
+    function collectServices(){
+      const files = [];
+      const list = services.map(s => ({
+        id: s.id,
+        name: s.name.trim(),
+        description: s.description.trim(),
+        photos: [
+          ...s.photos.filter(p => !s.removed.has(p.id)).map(p => ({ id: p.id })),
+          ...s.added.map(a => (a.file ? { file: files.push(a.file) - 1 } : { url: a.url })),
+        ],
+      }));
+      return { list, files };
+    }
+
     function fill(p){
+      services.forEach(s => s.added.forEach(a => { if(a.file) URL.revokeObjectURL(a.thumb); }));
+      services = (Array.isArray(p.services) ? p.services : []).map(s => ({
+        id: s.id, name: s.name || '', description: s.description || '',
+        photos: Array.isArray(s.photos) ? s.photos : [], removed: new Set(), added: [],
+      }));
+      renderServices();
       groups.forEach(g => g.added.forEach(a => { if(a.file && a.thumb) URL.revokeObjectURL(a.thumb); }));
       groups = (Array.isArray(p.equipment) ? p.equipment : []).map(g => ({
         id: g.id, name: g.name || '', items: Array.isArray(g.items) ? g.items : [], removed: new Set(), added: [],
@@ -1374,6 +1511,7 @@
         p.backgroundImage,
         p.logo,
         ...groups.flatMap(g => g.items.filter(it => it.kind === 'image').map(it => it.url)),
+        ...services.flatMap(s => s.photos.map(ph => ph.url)),
       ].filter(Boolean))];
       $('#ef-name').value = p.name || '';
       $('#ef-category').value = p.category || '';
@@ -1432,10 +1570,13 @@
       if(total > MAX_PRODUCT_IMAGES) return fail(`אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
       const eqProblem = equipmentProblem();
       if(eqProblem) return fail(eqProblem);
+      const svProblem = servicesProblem();
+      if(svProblem) return fail(svProblem);
       const equipment = collectEquipment();
+      const serviceData = collectServices();
 
       submitBtn.disabled = true;
-      const uploading = added.length || equipment.files.length || (bgInput.files && bgInput.files[0]) || (videoInput.files && videoInput.files[0]);
+      const uploading = added.length || equipment.files.length || serviceData.files.length || (bgInput.files && bgInput.files[0]) || (videoInput.files && videoInput.files[0]);
       submitBtn.textContent = uploading ? 'שומר ומעלה קבצים…' : 'שומר…';
       const extras = editor.collect();
       const formData = new FormData();
@@ -1456,6 +1597,8 @@
       formData.set('pickedPhotos', JSON.stringify(reused));
       formData.set('equipment', JSON.stringify(equipment.list));
       equipment.files.forEach(f => formData.append('equipmentFiles', f));
+      formData.set('services', JSON.stringify(serviceData.list));
+      serviceData.files.forEach(f => formData.append('serviceFiles', f));
       if(removeLogo.checked) formData.set('removeLogo', '1');
       if(logoInput.files && logoInput.files[0]) formData.set('logo', logoInput.files[0]);
       const { ok, status, data } = await api(endpoint, { method: 'PUT', formData });

@@ -20,6 +20,11 @@ const MAX_EQUIPMENT_GROUPS = 10;
 const MAX_EQUIPMENT_NAME = 40;
 const MAX_EQUIPMENT_PER_GROUP = 20;
 const MAX_EQUIPMENT_ITEMS = 60;
+// מגוון השירותים שלנו: named services, each with a description and 1–3 photos.
+const MAX_SERVICES = 12;
+const MAX_SERVICE_NAME = 60;
+const MAX_SERVICE_DESCRIPTION = 500;
+const MAX_SERVICE_PHOTOS = 3;
 // Every file is held in memory until it reaches storage, so 30 photos plus a
 // video could use more RAM than the whole instance has. The size of the
 // submission is checked from its header, before a single byte is read.
@@ -67,7 +72,7 @@ function parseForm(onError) {
 // checked in checkEdit.
 const editUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 + MAX_EQUIPMENT_ITEMS },
+  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 + MAX_EQUIPMENT_ITEMS + MAX_SERVICES * MAX_SERVICE_PHOTOS },
   fileFilter,
 }).fields([
   { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
@@ -75,6 +80,7 @@ const editUpload = multer({
   { name: 'logo', maxCount: 1 },
   { name: 'video', maxCount: 1 },
   { name: 'equipmentFiles', maxCount: MAX_EQUIPMENT_ITEMS },
+  { name: 'serviceFiles', maxCount: MAX_SERVICES * MAX_SERVICE_PHOTOS },
 ]);
 
 function parseEditForm(onError) {
@@ -151,8 +157,85 @@ function readEditForm(req) {
     // The whole ציוד section as the page wants it to be, plus its new files.
     equipment: sent('equipment'),
     equipmentFiles: req.files?.equipmentFiles || [],
+    // מגוון השירותים שלנו, as the page wants it to be, plus its new photos.
+    services: sent('services'),
+    serviceFiles: req.files?.serviceFiles || [],
   };
 }
+
+/* The services arrive as one JSON list:
+     [{ id: "existing id" | null, name, description, photos: [
+         { id: "existing photo id" } | { file: 0 } | { url: "a photo this profile has" }
+     ] }]
+   Anything of the profile's services not named here is removed.
+   Returns { services } or { error }; null when the field was not sent. */
+function parseServices(raw, files) {
+  if (raw === null) return null;
+  const list = parseJsonArray(raw, 'השירותים');
+  if (list.error) return { error: list.error };
+  if (list.value.length > MAX_SERVICES) return { error: `אפשר עד ${MAX_SERVICES} שירותים.` };
+
+  const services = [];
+  const names = new Set();
+  const usedFiles = new Set();
+  const idOk = (v) => /^[\w-]{1,40}$/.test(String(v));
+  for (const [i, entry] of list.value.entries()) {
+    const label = `שירות ${i + 1}`;
+    if (!entry || typeof entry !== 'object') return { error: `${label}: הנתונים לא תקינים.` };
+    const name = String(entry.name ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) return { error: `${label}: יש לתת שם לשירות.` };
+    if (name.length > MAX_SERVICE_NAME) return { error: `${label}: השם ארוך מדי (עד ${MAX_SERVICE_NAME} תווים).` };
+    if (names.has(name)) return { error: `השם "${name}" מופיע פעמיים — לכל שירות צריך שם משלו.` };
+    names.add(name);
+    const description = String(entry.description ?? '').trim();
+    if (description.length > MAX_SERVICE_DESCRIPTION) return { error: `"${name}": התיאור ארוך מדי (עד ${MAX_SERVICE_DESCRIPTION} תווים).` };
+    const id = entry.id == null ? null : String(entry.id);
+    if (id !== null && !idOk(id)) return { error: `${label}: הנתונים לא תקינים.` };
+
+    const rawPhotos = Array.isArray(entry.photos) ? entry.photos : [];
+    if (!rawPhotos.length) return { error: `"${name}": צריך לפחות תמונה אחת לשירות.` };
+    if (rawPhotos.length > MAX_SERVICE_PHOTOS) return { error: `"${name}": אפשר עד ${MAX_SERVICE_PHOTOS} תמונות לשירות.` };
+    const photos = [];
+    for (const photo of rawPhotos) {
+      if (!photo || typeof photo !== 'object') return { error: `"${name}": אחת התמונות לא תקינה.` };
+      if (photo.id != null) {
+        if (!idOk(photo.id)) return { error: `"${name}": אחת התמונות לא תקינה.` };
+        photos.push({ id: String(photo.id) });
+      } else if (photo.file != null) {
+        const index = Number(photo.file);
+        if (!Number.isInteger(index) || index < 0 || index >= files.length || usedFiles.has(index)) {
+          return { error: `"${name}": אחת התמונות חסרה. נסו לבחור אותה שוב.` };
+        }
+        usedFiles.add(index);
+        photos.push({ file: index });
+      } else if (photo.url != null) {
+        const url = String(photo.url);
+        if (!url || url.length > 1000) return { error: `"${name}": אחת התמונות שנבחרו לא תקינה.` };
+        photos.push({ url });
+      } else {
+        return { error: `"${name}": אחת התמונות לא תקינה.` };
+      }
+    }
+    services.push({ id, name, description, photos });
+  }
+  for (const [i, file] of files.entries()) {
+    if (usedFiles.has(i) && file.size > MAX_IMAGE_BYTES) return { error: 'אחת מתמונות השירותים גדולה מדי — עד 5MB לתמונה.' };
+  }
+  return { services };
+}
+
+// The stored services of a profile, always a clean list.
+function servicesOf(supplier) {
+  if (!Array.isArray(supplier.services)) return [];
+  return supplier.services
+    .filter((s) => s && typeof s === 'object')
+    .map((s) => ({
+      id: String(s.id), name: String(s.name || ''), description: String(s.description || ''),
+      photos: Array.isArray(s.photos) ? s.photos.filter((p) => p && p.url) : [],
+    }));
+}
+
+const serviceFiles = (supplier) => servicesOf(supplier).flatMap((s) => s.photos.map((p) => p.url));
 
 /* The equipment section arrives as one JSON list of groups:
      [{ id: "existing id" | null, name: "רמקולים", items: [
@@ -247,6 +330,7 @@ function profileImages(supplier) {
     supplier.backgroundImage,
     supplier.logo,
     ...equipmentOf(supplier).flatMap((g) => g.items.filter((it) => it.kind === 'image').map((it) => it.url)),
+    ...serviceFiles(supplier),
   ];
   return new Set(urls.filter(Boolean));
 }
@@ -311,6 +395,8 @@ function checkEdit(form, { requirePhone = false } = {}) {
   if (extras.error) return { error: extras.error };
   const equipment = parseEquipment(form.equipment, form.equipmentFiles);
   if (equipment?.error) return { error: equipment.error };
+  const services = parseServices(form.services, form.serviceFiles);
+  if (services?.error) return { error: services.error };
   return {
     name: form.name, category: form.category, city: form.city,
     description: form.description, contactEmail: form.contactEmail, phone: form.phone,
@@ -320,6 +406,7 @@ function checkEdit(form, { requirePhone = false } = {}) {
     video, removeVideo: form.removeVideo,
     // null when the page did not send the section: it is then left as it is.
     equipment: equipment ? equipment.groups : null,
+    services: services ? services.services : null,
   };
 }
 
@@ -540,6 +627,7 @@ module.exports = {
   MAX_EQUIPMENT_GROUPS, MAX_EQUIPMENT_NAME, MAX_EQUIPMENT_PER_GROUP, MAX_EQUIPMENT_ITEMS, VIDEO_MIME,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
   parseEditForm, readEditForm, checkEdit, photoPlan, phoneError, parseEquipment, equipmentOf, equipmentFiles,
-  profileImages, pickedPhotoPlan,
+  profileImages, pickedPhotoPlan, parseServices, servicesOf, serviceFiles,
+  MAX_SERVICES, MAX_SERVICE_NAME, MAX_SERVICE_DESCRIPTION, MAX_SERVICE_PHOTOS,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };

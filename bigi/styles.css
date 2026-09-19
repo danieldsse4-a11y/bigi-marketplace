@@ -869,6 +869,7 @@ body.lb-open{ position:fixed; left:0; right:0; width:100%; overflow:hidden; }
 .edit-group-btn.is-delete:hover{ background:var(--accent); color:#fff; }
 .edit-group-btn:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; }
 .edit-group .edit-photos{ margin-bottom:12px; }
+.edit-service-desc{ width:100%; margin-bottom:12px; resize:vertical; min-height:64px; }
 .edit-photo.is-video{ display:flex; align-items:center; justify-content:center; background:var(--ink); color:#fff; }
 .edit-photo.is-video .edit-photo-play{ font-size:28px; line-height:1; }
 .edit-photo.is-new::before{

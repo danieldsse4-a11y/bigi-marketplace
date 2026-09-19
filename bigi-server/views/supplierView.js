@@ -1,7 +1,7 @@
 const { escapeHtml } = require('./layout');
 const { categoryById, CITIES } = require('../lib/siteData');
 const { normalizePhone } = require('../lib/catalog');
-const { socialLinksOf, equipmentOf } = require('../lib/supplierProfile');
+const { socialLinksOf, equipmentOf, servicesOf } = require('../lib/supplierProfile');
 const { summarize, SCORES, MAX_SERVICE } = require('../lib/reviews');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
@@ -223,12 +223,15 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     backgroundImage, productImages, video,
   } = supplier;
   const packages = supplier.packages || [];
+  // Like חבילות: a supplier with no services gets no tab.
+  const services = servicesOf(supplier).filter((svc) => svc.photos.length);
   const logo = supplier.logo || null;
   // A supplier with no packages gets no חבילות tab at all, rather than a tab
   // that only ever says there is nothing here.
   const tabs = [
     { id: 'about', label: 'אודות' },
     ...(packages.length ? [{ id: 'packages', label: 'חבילות' }] : []),
+    ...(services.length ? [{ id: 'services', label: 'מגוון השירותים שלנו' }] : []),
     { id: 'reviews', label: 'ביקורות' },
   ];
 
@@ -346,7 +349,7 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   /* Small pills in the card's top-left corner, styled like the header's nav buttons.
      Without JS every panel simply stays visible and the pills stay hidden. */
   .profile-tabs{ display:none; }
-  .js .profile-tabs{ display:flex; justify-content:flex-end; gap:8px; padding:16px 20px 0; }
+  .js .profile-tabs{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; padding:16px 20px 0; }
   .profile-tab{
     padding:8px 14px; border-radius:var(--radius-pill); font-weight:600; font-size:14px;
     color:var(--ink-soft); background:transparent;
@@ -456,6 +459,28 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     content:"✓"; position:absolute; inset-inline-start:0; top:1px; width:17px; height:17px; border-radius:50%;
     background:#E6F9F5; color:var(--success); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
   }
+  /* מגוון השירותים שלנו: a card per service — one big photo, up to two small ones beside it */
+  .service-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:18px; }
+  .service-card{
+    display:flex; flex-direction:column; border:1.5px solid var(--line); border-radius:var(--radius-lg); overflow:hidden; background:#fff;
+    transition:border-color .25s var(--ease-out), transform .25s var(--ease-out), box-shadow .25s var(--ease-out);
+  }
+  .service-card:hover{ border-color:var(--primary-light); transform:translateY(-3px); box-shadow:var(--shadow-md); }
+  /* Fixed 4:3 frame; minmax(0, …) keeps a photo from stretching its row */
+  .service-photos{
+    display:grid; gap:3px; aspect-ratio:4/3; min-height:0; background:var(--bg-soft);
+    grid-template-columns:minmax(0, 1fr); grid-template-rows:minmax(0, 1fr);
+  }
+  .service-photos.count-2{ grid-template-columns:minmax(0, 2fr) minmax(0, 1fr); }
+  .service-photos.count-3{ grid-template-columns:minmax(0, 2fr) minmax(0, 1fr); grid-template-rows:repeat(2, minmax(0, 1fr)); }
+  .service-photos.count-3 .service-photo:first-child{ grid-row:span 2; }
+  .service-photo{ position:relative; overflow:hidden; min-height:0; cursor:zoom-in; }
+  .service-photo img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; transition:transform .4s var(--ease-out); }
+  .service-photo:hover img{ transform:scale(1.05); }
+  .service-photo:focus-visible{ outline:3px solid var(--primary-light); outline-offset:-3px; }
+  .service-body{ padding:16px 18px 18px; }
+  .service-body h4{ font-size:16.5px; margin-bottom:6px; overflow-wrap:anywhere; }
+  .service-body p{ margin:0; font-size:14px; line-height:1.65; color:var(--ink-soft); white-space:pre-line; overflow-wrap:anywhere; }
   /* Pushed to the bottom so every button in the row lines up */
   .package-cta{ margin-top:auto; justify-content:center; font-size:14.5px; padding:13px 18px; }
   @media (max-width:760px){
@@ -559,6 +584,25 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
       }).join('')}</div>
     </div>`}
 
+    ${!services.length ? '' : `
+    <div class="supplier-section tab-panel" id="panel-services" role="tabpanel" aria-labelledby="tab-services">
+      <h3>מגוון השירותים שלנו</h3>
+      <div class="service-grid">${services.map((svc) => `
+        <article class="service-card">
+          <div class="service-photos count-${svc.photos.length}">
+            ${svc.photos.map((p, i) => `
+            <figure class="service-photo" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.url)}" data-lb-caption="${escapeHtml(svc.name)}">
+              <img src="${escapeHtml(p.url)}" alt="${escapeHtml(i === 0 ? svc.name : `${svc.name} — תמונה ${i + 1}`)}" loading="lazy">
+            </figure>`).join('')}
+          </div>
+          <div class="service-body">
+            <h4>${escapeHtml(svc.name)}</h4>
+            ${svc.description ? `<p>${escapeHtml(svc.description)}</p>` : ''}
+          </div>
+        </article>`).join('')}
+      </div>
+    </div>`}
+
     <div class="supplier-section tab-panel" id="panel-reviews" role="tabpanel" aria-labelledby="tab-reviews">
       ${reviewsPanel(supplier, reviews, viewer)}
     </div>
@@ -612,6 +656,8 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
     var first = grid.querySelector('[data-lb-src]');
     if(all && first) all.addEventListener('click', function(){ first.click(); });
   });
+  // Each service opens its own photos.
+  Array.prototype.forEach.call(document.querySelectorAll('.service-photos'), function(el){ window.Lightbox.attach(el); });
 })();
 </script>
 <script>
