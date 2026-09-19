@@ -169,9 +169,17 @@ function reviewsPanel(supplier, list, viewer) {
   } else if (viewer.role !== 'customer') {
     write = '<p class="review-note">רק חשבונות לקוח יכולים לכתוב ביקורות.</p>';
   } else {
+    // Folded behind a button until the customer asks for it. Without scripts
+    // the button is hidden and the form simply shows.
     write = `
+      <div class="review-write">
+      <button type="button" class="btn btn-primary review-write-toggle" aria-expanded="false" aria-controls="review-write-body">
+        ${own ? '✏️ עריכת הביקורת שלכם' : '✍️ כתבו ביקורת'}
+        <svg class="review-write-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="review-write-body" id="review-write-body">
+      <div class="review-write-inner">
       <form class="review-form" data-supplier="${escapeHtml(supplier.id)}" novalidate>
-        <div class="review-form-title">${own ? 'הביקורת שלכם' : 'כתבו ביקורת'}</div>
         <p class="review-form-hint">תנו ציון מ־1 עד 10 לכל אחד מהתחומים. הציון הכללי הוא הממוצע שלהם.</p>
         <div class="score-pickers">
           ${SCORES.map(({ key, label }) => {
@@ -206,7 +214,10 @@ function reviewsPanel(supplier, list, viewer) {
           <button type="submit" class="btn btn-primary btn-sm">${own ? 'עדכון הביקורת' : 'פרסום הביקורת'}</button>
           ${own ? '<button type="button" class="btn btn-ghost btn-sm" data-delete-review>מחיקת הביקורת שלי</button>' : ''}
         </div>
-      </form>`;
+      </form>
+      </div>
+      </div>
+      </div>`;
   }
 
   return `
@@ -375,9 +386,24 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   .review-avg{ font-size:13.5px; font-weight:700; color:var(--ink-soft); margin-inline-start:8px; }
   /* The reviews come first; writing one comes after them */
   .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-top:18px; }
-  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-top:20px; display:grid; gap:14px; }
-  .review-form-title{ font-weight:800; font-size:14.5px; }
-  .review-form-hint{ font-size:13px; color:var(--muted); margin:-8px 0 0; }
+  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; display:grid; gap:14px; }
+  .review-form-hint{ font-size:13px; color:var(--muted); margin:0; }
+  /* The form opens downward from its button. Rows 0fr → 1fr animates to the
+     form's own height; hidden content can't be tabbed into while folded. */
+  .review-write{ margin-top:20px; }
+  .review-write-toggle{ display:none; }
+  /* scroll-margin keeps the button clear of the sticky site header when the form scrolls into view */
+  .js .review-write-toggle{ display:inline-flex; align-items:center; gap:8px; scroll-margin-top:96px; }
+  .review-write-chevron{ transition:transform .3s var(--ease-out); }
+  .review-write.open .review-write-chevron{ transform:rotate(180deg); }
+  .js .review-write-body{
+    display:grid; grid-template-rows:0fr; visibility:hidden;
+    transition:grid-template-rows .35s var(--ease-out), visibility 0s linear .35s;
+  }
+  .js .review-write.open .review-write-body{ grid-template-rows:1fr; visibility:visible; transition:grid-template-rows .35s var(--ease-out); }
+  .review-write-inner{ overflow:hidden; min-height:0; }
+  .js .review-write-inner .review-form{ margin-top:14px; }
+  @media (prefers-reduced-motion:reduce){ .js .review-write-body, .review-write-chevron{ transition:none; } }
   .score-pickers{ display:grid; gap:12px; }
   .score-picker-label{ font-weight:700; font-size:14px; margin-bottom:6px; }
   .score-row{ display:grid; grid-template-columns:repeat(10, minmax(0, 1fr)); gap:6px; }
@@ -701,6 +727,21 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 (function(){
   var form = document.querySelector('.review-form');
   if(!form) return;
+  var write = document.querySelector('.review-write');
+  var toggle = write.querySelector('.review-write-toggle');
+  function setOpen(open){
+    write.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  toggle.addEventListener('click', function(){
+    var open = !write.classList.contains('open');
+    setOpen(open);
+    if(open){
+      var first = form.querySelector('.score-btn.on') || form.querySelector('.score-btn');
+      // After the opening animation, so the page scrolls to where the form ends up.
+      setTimeout(function(){ first.focus({ preventScroll: true }); toggle.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 360);
+    }
+  });
   var errorBox = form.querySelector('.review-form-error');
   var textarea = form.querySelector('textarea');
   var serviceInput = form.querySelector('input[name=service]');
