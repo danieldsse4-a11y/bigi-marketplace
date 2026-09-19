@@ -1087,7 +1087,173 @@
       if(videoLinkInput.value.trim()) removeVideo.checked = false;
     });
 
+    /* ציוד: named groups, each with its own photos and videos. Existing items
+       can be marked for removal (and brought back); new files and links wait
+       in the group until the form is saved. Nothing changes before that. */
+    const EQ = { groups: 10, name: 40, perGroup: 20, total: 60 };
+    const eqRoot = $('#edit-equipment');
+    const addGroupBtn = $('#edit-add-group');
+    let groups = [];
+    const groupCount = (g) => g.items.length - g.removed.size + g.added.length;
+    const eqTotal = () => groups.reduce((n, g) => n + groupCount(g), 0);
+    const eqUploads = () => groups.flatMap(g => g.added.filter(a => a.file));
+
+    function renderEquipment(){
+      const tile = (cls, attrs, inner, label) => `
+        <div class="edit-photo ${cls}" ${attrs}>
+          ${inner}
+          <span class="edit-photo-cap">${label}</span>
+          <button type="button" class="edit-photo-x" data-act="item" aria-label="${cls.includes('is-removed') ? 'ביטול ההסרה' : 'הסרה'}">${cls.includes('is-removed') ? '↩' : '✕'}</button>
+        </div>`;
+      const play = '<span class="edit-photo-play" aria-hidden="true">▶</span>';
+      eqRoot.innerHTML = groups.map((g, gi) => {
+        const count = groupCount(g);
+        const existing = g.items.map((it, i) => {
+          const gone = g.removed.has(it.id);
+          const isImage = it.kind === 'image';
+          return tile(`${isImage ? '' : 'is-video'}${gone ? ' is-removed' : ''}`, `data-i="${i}"`,
+            isImage ? `<img src="${esc(it.url)}" alt="" loading="lazy">` : play,
+            gone ? 'יוסר בשמירה' : (isImage ? '' : 'סרטון'));
+        });
+        const added = g.added.map((a, i) => tile(`is-new${a.file && !a.thumb ? ' is-video' : ''}${a.link ? ' is-video' : ''}`, `data-n="${i}"`,
+          a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : play, a.link ? 'קישור לסרטון' : (a.thumb ? '' : esc(a.file.name))));
+        return `
+        <div class="edit-group" data-g="${gi}">
+          <div class="edit-group-head">
+            <input type="text" class="edit-group-name" maxlength="${EQ.name}" placeholder="שם הקטגוריה, למשל: רמקולים" value="${esc(g.name)}" aria-label="שם קטגוריית הציוד">
+            <button type="button" class="edit-group-btn" data-act="up" aria-label="העברה למעלה"${gi === 0 ? ' disabled' : ''}>↑</button>
+            <button type="button" class="edit-group-btn" data-act="down" aria-label="העברה למטה"${gi === groups.length - 1 ? ' disabled' : ''}>↓</button>
+            <button type="button" class="edit-group-btn is-delete" data-act="delete" aria-label="מחיקת הקטגוריה">✕</button>
+          </div>
+          <div class="edit-photos">${existing.join('')}${added.join('')}</div>
+          <div class="edit-group-actions">
+            <label class="btn btn-secondary btn-sm">📷 הוספת תמונות או סרטונים<input type="file" multiple accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime"${count >= EQ.perGroup ? ' disabled' : ''}></label>
+            <div class="edit-group-link">
+              <input type="url" inputmode="url" class="edit-group-link-input" placeholder="או הדביקו קישור לסרטון" aria-label="קישור לסרטון"${count >= EQ.perGroup ? ' disabled' : ''}>
+              <button type="button" class="btn btn-ghost btn-sm" data-act="link"${count >= EQ.perGroup ? ' disabled' : ''}>הוספה</button>
+            </div>
+            <span class="edit-group-count${count >= EQ.perGroup ? ' is-full' : ''}">${count} מתוך ${EQ.perGroup} פריטים</span>
+          </div>
+        </div>`;
+      }).join('');
+      const total = eqTotal();
+      $('#edit-equipment-count').textContent = groups.length ? `(${total} מתוך ${EQ.total})` : '';
+      $('#edit-equipment-count').classList.toggle('is-low', total > EQ.total);
+      addGroupBtn.hidden = groups.length >= EQ.groups;
+    }
+
+    const groupOf = (el) => groups[Number(el.closest('.edit-group').dataset.g)];
+    addGroupBtn.addEventListener('click', () => {
+      groups.push({ id: null, name: '', items: [], removed: new Set(), added: [] });
+      renderEquipment();
+      const inputs = $$('.edit-group-name', eqRoot);
+      inputs[inputs.length - 1].focus();
+    });
+    eqRoot.addEventListener('input', (e) => {
+      if(e.target.classList.contains('edit-group-name')) groupOf(e.target).name = e.target.value;
+    });
+    eqRoot.addEventListener('keydown', (e) => {
+      // Enter in the link box adds the link instead of submitting the form.
+      if(e.key === 'Enter' && e.target.classList.contains('edit-group-link-input')){
+        e.preventDefault();
+        $('[data-act=link]', e.target.closest('.edit-group')).click();
+      }
+    });
+    eqRoot.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act]');
+      if(!btn) return;
+      const card = btn.closest('.edit-group');
+      const gi = Number(card.dataset.g);
+      const g = groups[gi];
+      const act = btn.dataset.act;
+      if(act === 'up' || act === 'down'){
+        const to = act === 'up' ? gi - 1 : gi + 1;
+        if(to < 0 || to >= groups.length) return;
+        [groups[gi], groups[to]] = [groups[to], groups[gi]];
+        renderEquipment();
+        $(`.edit-group[data-g="${to}"] [data-act=${act}]`, eqRoot).focus();
+      } else if(act === 'delete'){
+        if(groupCount(g) && !window.confirm(`למחוק את הקטגוריה "${g.name || 'ללא שם'}" עם כל התמונות והסרטונים שבה?`)) return;
+        groups.splice(gi, 1);
+        renderEquipment();
+        (addGroupBtn.hidden ? $('.edit-group-name', eqRoot) : addGroupBtn).focus();
+      } else if(act === 'link'){
+        const input = $('.edit-group-link-input', card);
+        const link = input.value.trim();
+        if(!link) return;
+        if(!/^https?:\/\/\S+$/i.test(link)) return fail('הקישור לסרטון צריך להתחיל ב־http או https.');
+        if(groupCount(g) >= EQ.perGroup) return;
+        g.added.push({ link });
+        renderEquipment();
+        $('.edit-group-link-input', $(`.edit-group[data-g="${gi}"]`, eqRoot)).focus();
+      } else if(act === 'item'){
+        const photo = btn.closest('.edit-photo');
+        if(photo.dataset.n !== undefined){
+          const [gone] = g.added.splice(Number(photo.dataset.n), 1);
+          if(gone && gone.thumb) URL.revokeObjectURL(gone.thumb);
+        } else {
+          const item = g.items[Number(photo.dataset.i)];
+          if(g.removed.has(item.id)) g.removed.delete(item.id); else g.removed.add(item.id);
+        }
+        renderEquipment();
+      }
+    });
+    eqRoot.addEventListener('change', (e) => {
+      if(e.target.type !== 'file') return;
+      const g = groupOf(e.target);
+      const files = Array.from(e.target.files || []);
+      for(const file of files){
+        const isVideo = file.type.startsWith('video/');
+        if(!isVideo && file.size > 5 * 1024 * 1024) return fail(`התמונה "${file.name}" גדולה מדי — עד 5MB לתמונה.`);
+        if(isVideo && file.size > 45 * 1024 * 1024) return fail(`הסרטון "${file.name}" גדול מדי — עד 45MB לסרטון.`);
+      }
+      const room = EQ.perGroup - groupCount(g);
+      if(files.length > room) fail(`אפשר עד ${EQ.perGroup} פריטים בקטגוריה — נוספו רק ${Math.max(room, 0)} מתוך ${files.length}.`);
+      for(const file of files.slice(0, Math.max(room, 0))){
+        g.added.push({ file, thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+      }
+      renderEquipment();
+    });
+
+    function fail(message){
+      errorBox.textContent = message;
+      errorBox.hidden = false;
+      errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    // The section as the server wants it, and the new files in the same order.
+    function collectEquipment(){
+      const files = [];
+      const list = groups.map(g => ({
+        id: g.id,
+        name: g.name.trim(),
+        items: [
+          ...g.items.filter(it => !g.removed.has(it.id)).map(it => ({ id: it.id })),
+          ...g.added.map(a => (a.file ? { file: files.push(a.file) - 1 } : { link: a.link })),
+        ],
+      }));
+      return { list, files };
+    }
+
+    function equipmentProblem(){
+      const names = new Set();
+      for(const g of groups){
+        const name = g.name.trim().replace(/\s+/g, ' ');
+        if(!name) return 'יש לתת שם לכל קטגוריית ציוד.';
+        if(names.has(name)) return `השם "${name}" מופיע פעמיים — לכל קטגוריית ציוד צריך שם משלה.`;
+        names.add(name);
+        if(groupCount(g) > EQ.perGroup) return `"${name}": אפשר עד ${EQ.perGroup} פריטים בקטגוריה.`;
+      }
+      if(eqTotal() > EQ.total) return `אפשר עד ${EQ.total} פריטי ציוד בסך הכול (אחרי השינוי יהיו ${eqTotal()}).`;
+      return null;
+    }
+
     function fill(p){
+      groups.forEach(g => g.added.forEach(a => { if(a.thumb) URL.revokeObjectURL(a.thumb); }));
+      groups = (Array.isArray(p.equipment) ? p.equipment : []).map(g => ({
+        id: g.id, name: g.name || '', items: Array.isArray(g.items) ? g.items : [], removed: new Set(), added: [],
+      }));
+      renderEquipment();
       $('#ef-name').value = p.name || '';
       $('#ef-category').value = p.category || '';
       $('#ef-city').value = p.city || '';
@@ -1136,20 +1302,18 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.hidden = true;
-      const fail = (message) => {
-        errorBox.textContent = message;
-        errorBox.hidden = false;
-        errorBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      };
       // The same photo rules the server applies, so the answer is immediate.
       const added = newFiles();
       if(added.some(r => !r.caption)) return fail('לכל תמונה חדשה צריך תיאור.');
       const total = photoTotal();
       if(total < MIN_PRODUCT_IMAGES) return fail(`צריך להשאיר לפחות ${MIN_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
       if(total > MAX_PRODUCT_IMAGES) return fail(`אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
+      const eqProblem = equipmentProblem();
+      if(eqProblem) return fail(eqProblem);
+      const equipment = collectEquipment();
 
       submitBtn.disabled = true;
-      const uploading = added.length || (bgInput.files && bgInput.files[0]) || (videoInput.files && videoInput.files[0]);
+      const uploading = added.length || equipment.files.length || (bgInput.files && bgInput.files[0]) || (videoInput.files && videoInput.files[0]);
       submitBtn.textContent = uploading ? 'שומר ומעלה קבצים…' : 'שומר…';
       const extras = editor.collect();
       const formData = new FormData();
@@ -1167,6 +1331,8 @@
       formData.set('socialLinks', JSON.stringify(extras.socialLinks));
       formData.set('removePhotos', JSON.stringify([...toRemove]));
       added.forEach(r => { formData.append('productImages', r.file); formData.append('productCaptions', r.caption); });
+      formData.set('equipment', JSON.stringify(equipment.list));
+      equipment.files.forEach(f => formData.append('equipmentFiles', f));
       if(removeLogo.checked) formData.set('removeLogo', '1');
       if(logoInput.files && logoInput.files[0]) formData.set('logo', logoInput.files[0]);
       const { ok, status, data } = await api(endpoint, { method: 'PUT', formData });

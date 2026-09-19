@@ -15,6 +15,11 @@ const MAX_PACKAGE_ITEMS = 12;
 const MAX_PRICE = 1000000;
 const MAX_SOCIAL_LINKS = 6;
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+// The ציוד section: groups the supplier names, each holding photos and videos.
+const MAX_EQUIPMENT_GROUPS = 10;
+const MAX_EQUIPMENT_NAME = 40;
+const MAX_EQUIPMENT_PER_GROUP = 20;
+const MAX_EQUIPMENT_ITEMS = 60;
 // Every file is held in memory until it reaches storage, so 30 photos plus a
 // video could use more RAM than the whole instance has. The size of the
 // submission is checked from its header, before a single byte is read.
@@ -23,12 +28,11 @@ const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
 function fileFilter(req, file, cb) {
-  const allowed = file.fieldname === 'video' ? VIDEO_MIME : IMAGE_MIME;
-  if (!allowed.has(file.mimetype)) {
-    return cb(new Error(file.fieldname === 'video'
-      ? 'סוג הסרטון לא נתמך — רק MP4, WebM או MOV.'
-      : 'סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
-  }
+  const isImage = IMAGE_MIME.has(file.mimetype);
+  const isVideo = VIDEO_MIME.has(file.mimetype);
+  if (file.fieldname === 'video' && !isVideo) return cb(new Error('סוג הסרטון לא נתמך — רק MP4, WebM או MOV.'));
+  if (file.fieldname === 'equipmentFiles' && !isImage && !isVideo) return cb(new Error('סוג קובץ לא נתמך בציוד — רק JPG, PNG, WebP, MP4, WebM או MOV.'));
+  if (file.fieldname !== 'video' && file.fieldname !== 'equipmentFiles' && !isImage) return cb(new Error('סוג קובץ לא נתמך — רק JPG, PNG או WebP.'));
   cb(null, true);
 }
 
@@ -45,7 +49,7 @@ const upload = multer({
 
 function uploadErrorMessage(err) {
   if (err.code === 'LIMIT_FILE_SIZE') return 'הקובץ גדול מדי — סרטון עד 45MB ותמונה עד 5MB.';
-  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר, תמונת רקע, לוגו וסרטון אחד.`;
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `אפשר להעלות עד ${MAX_PRODUCT_IMAGES} תמונות מוצר, תמונת רקע, לוגו, סרטון אחד ועד ${MAX_EQUIPMENT_ITEMS} פריטי ציוד.`;
   return err.message;
 }
 
@@ -59,16 +63,18 @@ function parseForm(onError) {
 }
 
 // Editing takes the same files as sign-up: photos, a background, a logo and a
-// video. The per-kind size limits are checked in checkEdit.
+// video — plus the equipment photos and videos. The per-kind size limits are
+// checked in checkEdit.
 const editUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 },
+  limits: { fileSize: MAX_VIDEO_BYTES, files: MAX_PRODUCT_IMAGES + 3 + MAX_EQUIPMENT_ITEMS },
   fileFilter,
 }).fields([
   { name: 'productImages', maxCount: MAX_PRODUCT_IMAGES },
   { name: 'backgroundImage', maxCount: 1 },
   { name: 'logo', maxCount: 1 },
   { name: 'video', maxCount: 1 },
+  { name: 'equipmentFiles', maxCount: MAX_EQUIPMENT_ITEMS },
 ]);
 
 function parseEditForm(onError) {
@@ -140,7 +146,89 @@ function readEditForm(req) {
     productFiles: req.files?.productImages || [],
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     removePhotos: text('removePhotos'),
+    // The whole ציוד section as the page wants it to be, plus its new files.
+    equipment: sent('equipment'),
+    equipmentFiles: req.files?.equipmentFiles || [],
   };
+}
+
+/* The equipment section arrives as one JSON list of groups:
+     [{ id: "existing id" | null, name: "רמקולים", items: [
+         { id: "existing item id" },      kept as it is
+         { file: 0 },                     equipmentFiles[0], a new photo or video
+         { link: "https://youtu.be/…" }   a new pasted video link
+     ] }]
+   Anything of the profile's equipment not named here is removed.
+   Returns { groups } or { error }; null when the field was not sent. */
+function parseEquipment(raw, files) {
+  if (raw === null) return null;
+  const list = parseJsonArray(raw, 'קטגוריות הציוד');
+  if (list.error) return { error: list.error };
+  if (list.value.length > MAX_EQUIPMENT_GROUPS) return { error: `אפשר עד ${MAX_EQUIPMENT_GROUPS} קטגוריות ציוד.` };
+
+  const groups = [];
+  const names = new Set();
+  const usedFiles = new Set();
+  let total = 0;
+  for (const [i, entry] of list.value.entries()) {
+    const label = `קטגוריית ציוד ${i + 1}`;
+    if (!entry || typeof entry !== 'object') return { error: `${label}: הנתונים לא תקינים.` };
+    const name = String(entry.name ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) return { error: `${label}: יש לתת שם לקטגוריה.` };
+    if (name.length > MAX_EQUIPMENT_NAME) return { error: `${label}: השם ארוך מדי (עד ${MAX_EQUIPMENT_NAME} תווים).` };
+    if (names.has(name)) return { error: `השם "${name}" מופיע פעמיים — לכל קטגוריית ציוד צריך שם משלה.` };
+    names.add(name);
+    const id = entry.id == null ? null : String(entry.id);
+    if (id !== null && !/^[\w-]{1,40}$/.test(id)) return { error: `${label}: הנתונים לא תקינים.` };
+
+    const rawItems = Array.isArray(entry.items) ? entry.items : [];
+    if (rawItems.length > MAX_EQUIPMENT_PER_GROUP) return { error: `"${name}": אפשר עד ${MAX_EQUIPMENT_PER_GROUP} פריטים בקטגוריה.` };
+    const items = [];
+    for (const item of rawItems) {
+      if (!item || typeof item !== 'object') return { error: `"${name}": אחד הפריטים לא תקין.` };
+      if (item.id != null) {
+        if (!/^[\w-]{1,40}$/.test(String(item.id))) return { error: `"${name}": אחד הפריטים לא תקין.` };
+        items.push({ id: String(item.id) });
+      } else if (item.file != null) {
+        const index = Number(item.file);
+        if (!Number.isInteger(index) || index < 0 || index >= files.length || usedFiles.has(index)) {
+          return { error: `"${name}": אחד הקבצים חסר. נסו לבחור אותו שוב.` };
+        }
+        usedFiles.add(index);
+        items.push({ file: index });
+      } else if (item.link != null) {
+        const link = normalizeVideoLink(String(item.link).trim());
+        if (!link) return { error: `"${name}": אחד הקישורים ריק.` };
+        if (link.error) return { error: `"${name}": ${link.error}` };
+        items.push({ link });
+      } else {
+        return { error: `"${name}": אחד הפריטים לא תקין.` };
+      }
+    }
+    total += items.length;
+    groups.push({ id, name, items });
+  }
+  if (total > MAX_EQUIPMENT_ITEMS) return { error: `אפשר עד ${MAX_EQUIPMENT_ITEMS} פריטי ציוד בסך הכול (אחרי השינוי יהיו ${total}).` };
+  for (const [i, file] of files.entries()) {
+    if (!usedFiles.has(i)) continue;
+    const isVideo = VIDEO_MIME.has(file.mimetype);
+    if (!isVideo && file.size > MAX_IMAGE_BYTES) return { error: 'אחת מתמונות הציוד גדולה מדי — עד 5MB לתמונה.' };
+    if (isVideo && file.size > MAX_VIDEO_BYTES) return { error: 'אחד מסרטוני הציוד גדול מדי — עד 45MB לסרטון.' };
+  }
+  return { groups };
+}
+
+// The stored equipment of a profile, always a clean list.
+function equipmentOf(supplier) {
+  if (!Array.isArray(supplier.equipment)) return [];
+  return supplier.equipment
+    .filter((g) => g && typeof g === 'object')
+    .map((g) => ({ id: String(g.id), name: String(g.name || ''), items: Array.isArray(g.items) ? g.items : [] }));
+}
+
+// Every stored file address in the equipment section (links are only text).
+function equipmentFiles(supplier) {
+  return equipmentOf(supplier).flatMap((g) => g.items.filter((it) => it.kind === 'image' || it.kind === 'video').map((it) => it.url));
 }
 
 // Returns { error } or the cleaned values ready to store. The photo count is
@@ -174,6 +262,8 @@ function checkEdit(form, { requirePhone = false } = {}) {
 
   const extras = parseExtras(form);
   if (extras.error) return { error: extras.error };
+  const equipment = parseEquipment(form.equipment, form.equipmentFiles);
+  if (equipment?.error) return { error: equipment.error };
   return {
     name: form.name, category: form.category, city: form.city,
     description: form.description, contactEmail: form.contactEmail, phone: form.phone,
@@ -181,6 +271,8 @@ function checkEdit(form, { requirePhone = false } = {}) {
     captions, removePhotos: new Set(removals.value),
     // A pasted link, already in the shape the profile stores; null when none.
     video, removeVideo: form.removeVideo,
+    // null when the page did not send the section: it is then left as it is.
+    equipment: equipment ? equipment.groups : null,
   };
 }
 
@@ -398,7 +490,8 @@ async function buildSupplier(form, { createdBy, source, ownerUserId = null }) {
 
 module.exports = {
   MIN_PRODUCT_IMAGES, MAX_PRODUCT_IMAGES, MAX_PACKAGES, MAX_SOCIAL_LINKS, MAX_LOGO_BYTES,
+  MAX_EQUIPMENT_GROUPS, MAX_EQUIPMENT_NAME, MAX_EQUIPMENT_PER_GROUP, MAX_EQUIPMENT_ITEMS, VIDEO_MIME,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
-  parseEditForm, readEditForm, checkEdit, photoPlan, phoneError,
+  parseEditForm, readEditForm, checkEdit, photoPlan, phoneError, parseEquipment, equipmentOf, equipmentFiles,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };

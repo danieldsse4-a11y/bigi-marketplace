@@ -1,7 +1,7 @@
 const { escapeHtml } = require('./layout');
 const { categoryById } = require('../lib/siteData');
 const { normalizePhone } = require('../lib/catalog');
-const { socialLinksOf } = require('../lib/supplierProfile');
+const { socialLinksOf, equipmentOf } = require('../lib/supplierProfile');
 const { summarize } = require('../lib/reviews');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
@@ -53,6 +53,68 @@ const GALLERY_PREVIEW = 7;
 function galleryLayout(n) {
   const spans = galleryRows(n).flatMap((size) => Array(size).fill(12 / size));
   return spans.map((span, i) => [`span-${span}`, n % 2 === 1 && i === 0 ? 'm-wide' : ''].filter(Boolean).join(' '));
+}
+
+// The class list and "+N" badge of every tile in a gallery of `count` tiles.
+// A long gallery shows a preview of GALLERY_PREVIEW tiles; the last one says
+// "+N" and opens the full-screen viewer, which still has every tile. The
+// tiles past the preview get a layout of their own, so even with scripts off
+// (when they are not hidden) every row is still full.
+function galleryPlan(count) {
+  const collapsed = count > GALLERY_PREVIEW + 1;
+  const shown = collapsed ? GALLERY_PREVIEW : count;
+  const hiddenCount = count - shown;
+  const layout = [...galleryLayout(shown), ...galleryLayout(hiddenCount)];
+  return {
+    collapsed, hiddenCount,
+    classes: (t) => `${layout[t]}${t >= shown ? ' gallery-extra' : collapsed && t === shown - 1 ? ' gallery-last' : ''}`,
+    isLast: (t) => collapsed && t === shown - 1,
+    badge: (t) => (collapsed && t === shown - 1
+      ? `<span class="gallery-more" aria-hidden="true"><bdi dir="ltr">+${hiddenCount}</bdi></span>` : ''),
+  };
+}
+
+// A tile for an uploaded video, an embedded one, or a plain link to one. The
+// profile's background photo stands in for a poster.
+function videoTile(item, { classes, poster, caption, badge = '' }) {
+  const bg = `background-image:url('${escapeHtml(poster)}'); background-size:cover; background-position:center;`;
+  if (item.kind === 'link') {
+    return `
+          <a class="supplier-gallery-item media-tile ${classes}" href="${escapeHtml(item.url)}" target="_blank" rel="noopener" style="${bg}">
+            <span class="media-tile-label">סרטון</span>${badge}
+          </a>`;
+  }
+  return `
+          <figure class="supplier-gallery-item media-tile ${classes}" style="margin:0; ${bg}"
+             data-lb-type="${item.embed ? 'embed' : 'video'}" data-lb-src="${escapeHtml(item.embed || item.url)}"
+             data-lb-poster="${escapeHtml(poster)}" data-lb-caption="${escapeHtml(caption)}">
+            <span class="media-tile-label">סרטון</span>${badge}
+          </figure>`;
+}
+
+// One named group of the ציוד section: its photos and videos in full rows.
+function equipmentGroup(group, poster) {
+  const items = group.items.filter((it) => it && it.url);
+  if (!items.length) return '';
+  const plan = galleryPlan(items.length);
+  const photos = items.filter((it) => it.kind === 'image').length;
+  const videos = items.length - photos;
+  const tiles = items.map((it, t) => {
+    if (it.kind !== 'image') return videoTile(it, { classes: plan.classes(t), poster, caption: group.name, badge: plan.badge(t) });
+    return `
+          <figure class="supplier-gallery-item ${plan.classes(t)}" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(it.url)}" data-lb-caption="${escapeHtml(group.name)}"${plan.isLast(t) ? ` aria-label="${escapeHtml(`${group.name} — ועוד ${plan.hiddenCount} פריטים`)}"` : ''}>
+            <img src="${escapeHtml(it.url)}" alt="${escapeHtml(group.name)}" loading="lazy">
+            ${plan.badge(t)}
+          </figure>`;
+  }).join('');
+  const what = [photos ? `${photos} התמונות` : '', videos ? `${videos} הסרטונים` : ''].filter(Boolean).join(' ו');
+  return `
+      <div class="gallery-block equipment-group">
+        <h4>${escapeHtml(group.name)} <span class="equipment-count">${items.length}</span></h4>
+        <div class="gallery-grid gallery-mosaic">${tiles}
+        </div>
+        ${plan.collapsed ? `<button type="button" class="btn btn-secondary btn-sm gallery-all">📷 הצגת כל ${what}</button>` : ''}
+      </div>`;
 }
 
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
@@ -130,21 +192,8 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   const whatsapp = waLink(phone, enquiryText(name));
   const socialLinks = socialLinksOf(supplier);
   // The video tile, when there is one, comes first and counts as a tile.
-  // A long gallery shows a preview of GALLERY_PREVIEW tiles; the last one says
-  // "+N" and opens the full-screen viewer, which still has every photo.
-  const tileCount = productImages.length + (video ? 1 : 0);
-  const collapsed = tileCount > GALLERY_PREVIEW + 1;
-  const shown = collapsed ? GALLERY_PREVIEW : tileCount;
-  const hiddenCount = tileCount - shown;
-  // The tiles past the preview get a layout of their own, so even with
-  // scripts off (when they are not hidden) every row is still full.
-  const layout = [...galleryLayout(shown), ...galleryLayout(hiddenCount)];
-  const tileExtra = (t) => {
-    if (t >= shown) return ' gallery-extra';
-    return collapsed && t === shown - 1 ? ' gallery-last' : '';
-  };
-  const moreBadge = (t) => (collapsed && t === shown - 1
-    ? `<span class="gallery-more" aria-hidden="true"><bdi dir="ltr">+${hiddenCount}</bdi></span>` : '');
+  const gallery = galleryPlan(productImages.length + (video ? 1 : 0));
+  const equipment = equipmentOf(supplier).filter((g) => g.items.some((it) => it && it.url));
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -231,6 +280,17 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   .gallery-last figcaption{ display:none; }
   .gallery-all{ display:none; margin-top:16px; }
   .js .gallery-all{ display:inline-flex; }
+  /* ציוד: one titled gallery per group the supplier named */
+  .equipment-group{ margin-top:22px; }
+  .equipment-group:first-of-type{ margin-top:0; }
+  .equipment-group h4{
+    display:flex; align-items:center; gap:8px; font-size:15px; margin-bottom:12px; color:var(--ink);
+    overflow-wrap:anywhere;
+  }
+  .equipment-count{
+    display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 8px;
+    border-radius:var(--radius-pill); background:var(--primary-soft); color:var(--primary); font-size:12.5px; font-weight:800;
+  }
 
   /* Small pills in the card's top-left corner, styled like the header's nav buttons.
      Without JS every panel simply stays visible and the pills stay hidden. */
@@ -418,31 +478,28 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 
     <div class="supplier-section">
       <h3>${video ? 'תמונות וסרטון' : 'תמונות'}</h3>
+      <div class="gallery-block">
       <div class="gallery-grid gallery-mosaic">
-        ${!video ? '' : video.kind === 'link' ? `
-          <a class="supplier-gallery-item media-tile ${layout[0]}" href="${escapeHtml(video.url)}" target="_blank" rel="noopener"
-             style="background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;">
-            <span class="media-tile-label">סרטון</span>
-          </a>
-        ` : `
-          <figure class="supplier-gallery-item media-tile ${layout[0]}" style="margin:0; background-image:url('${escapeHtml(backgroundImage)}'); background-size:cover; background-position:center;"
-             data-lb-type="${video.embed ? 'embed' : 'video'}" data-lb-src="${escapeHtml(video.embed || video.url)}"
-             data-lb-poster="${escapeHtml(backgroundImage)}" data-lb-caption="${escapeHtml(name)}">
-            <span class="media-tile-label">סרטון</span>
-          </figure>
-        `}
+        ${!video ? '' : videoTile(video, { classes: gallery.classes(0), poster: backgroundImage, caption: name })}
         ${productImages.map((p, i) => {
           const t = i + (video ? 1 : 0);
           return `
-          <figure class="supplier-gallery-item ${layout[t]}${tileExtra(t)}" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}"${collapsed && t === shown - 1 ? ` aria-label="${escapeHtml(`${p.caption} — ועוד ${hiddenCount} תמונות`)}"` : ''}>
+          <figure class="supplier-gallery-item ${gallery.classes(t)}" style="margin:0;" data-lb-type="image" data-lb-src="${escapeHtml(p.file)}" data-lb-caption="${escapeHtml(p.caption)}"${gallery.isLast(t) ? ` aria-label="${escapeHtml(`${p.caption} — ועוד ${gallery.hiddenCount} תמונות`)}"` : ''}>
             <img src="${escapeHtml(p.file)}" alt="${escapeHtml(p.caption)}" loading="lazy">
             <figcaption>${escapeHtml(p.caption)}</figcaption>
-            ${moreBadge(t)}
+            ${gallery.badge(t)}
           </figure>`;
         }).join('')}
       </div>
-      ${collapsed ? `<button type="button" class="btn btn-secondary btn-sm gallery-all">📷 הצגת כל ${productImages.length} התמונות${video ? ' והסרטון' : ''}</button>` : ''}
+      ${gallery.collapsed ? `<button type="button" class="btn btn-secondary btn-sm gallery-all">📷 הצגת כל ${productImages.length} התמונות${video ? ' והסרטון' : ''}</button>` : ''}
+      </div>
     </div>
+
+    ${!equipment.length ? '' : `
+    <div class="supplier-section supplier-equipment" id="equipment">
+      <h3>ציוד</h3>
+      ${equipment.map((g) => equipmentGroup(g, backgroundImage)).join('')}
+    </div>`}
 
   </div>
 </div>
@@ -458,13 +515,16 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 <script src="/lightbox.js"></script>
 <script>
 (function(){
-  var grid = document.querySelector('.gallery-grid');
-  if(!window.Lightbox || !grid) return;
-  window.Lightbox.attach(grid);
-  // "Show all" opens the viewer at the first tile; it has every photo.
-  var all = document.querySelector('.gallery-all');
-  var first = grid.querySelector('[data-lb-src]');
-  if(all && first) all.addEventListener('click', function(){ first.click(); });
+  if(!window.Lightbox) return;
+  // Each gallery (the photos, and every equipment group) is its own viewer.
+  // "Show all" opens it at the first tile; it has every photo.
+  Array.prototype.forEach.call(document.querySelectorAll('.gallery-block'), function(block){
+    var grid = block.querySelector('.gallery-grid');
+    window.Lightbox.attach(grid);
+    var all = block.querySelector('.gallery-all');
+    var first = grid.querySelector('[data-lb-src]');
+    if(all && first) all.addEventListener('click', function(){ first.click(); });
+  });
 })();
 </script>
 <script>

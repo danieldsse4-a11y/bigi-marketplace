@@ -2,6 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
@@ -365,7 +366,41 @@ function imageInUse(data, url, exceptId) {
   return Object.values(data.suppliers).some((s) => s.id !== exceptId && (
     s.backgroundImage === url || s.logo === url || (s.video && s.video.url === url)
     || (s.productImages || []).some((p) => p.file === url)
+    || supplierForm.equipmentFiles(s).includes(url)
   ));
+}
+
+// The equipment section as it will be stored: kept items are looked up in the
+// profile's current section, new files get their uploaded addresses. Returns
+// the groups and the files of the current section that are no longer used.
+function equipmentPlan(current, groups, uploads) {
+  const existing = new Map();
+  for (const g of supplierForm.equipmentOf({ equipment: current })) {
+    for (const it of g.items) existing.set(it.id, it);
+  }
+  const groupIds = new Set(current.map((g) => g.id));
+  const seenGroups = new Set();
+  const seenItems = new Set();
+  const next = groups.map((g) => {
+    // An id that is not this profile's (or appears twice) means a new group.
+    const id = g.id && groupIds.has(g.id) && !seenGroups.has(g.id) ? g.id : `g${crypto.randomBytes(4).toString('hex')}`;
+    seenGroups.add(id);
+    const items = [];
+    for (const it of g.items) {
+      if (it.id != null) {
+        const found = existing.get(it.id);
+        if (found && !seenItems.has(it.id)) { seenItems.add(it.id); items.push(found); }
+      } else if (it.file != null) {
+        items.push(uploads[it.file]);
+      } else {
+        items.push({ id: `e${crypto.randomBytes(4).toString('hex')}`, kind: it.link.kind, url: it.link.url, ...(it.link.embed ? { embed: it.link.embed } : {}) });
+      }
+    }
+    return { id, name: g.name, items };
+  });
+  const keptUrls = new Set(next.flatMap((g) => g.items.map((it) => it.url)));
+  const removed = supplierForm.equipmentFiles({ equipment: current }).filter((url) => !keptUrls.has(url));
+  return { groups: next, removed };
 }
 
 // The fields a supplier can change, applied to one profile. `stillAllowed` is
@@ -387,7 +422,17 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
   let newBackground = null;
   let newVideo = null;
   const added = [];
+  // One stored item per equipment file, in the order the files arrived.
+  const equipmentUploads = [];
   try {
+    if (checked.equipment) {
+      for (const file of form.equipmentFiles) {
+        const isVideo = supplierForm.VIDEO_MIME.has(file.mimetype);
+        const url = isVideo ? await storage.saveVideo(id, file) : await storage.saveImage(id, file);
+        uploaded.push(url);
+        equipmentUploads.push({ id: `e${crypto.randomBytes(4).toString('hex')}`, kind: isVideo ? 'video' : 'image', url });
+      }
+    }
     if (form.logoFile) { newLogo = await storage.saveImage(id, form.logoFile); uploaded.push(newLogo); }
     if (form.backgroundFile) { newBackground = await storage.saveImage(id, form.backgroundFile); uploaded.push(newBackground); }
     if (form.videoFile) {
@@ -430,8 +475,14 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
       s.video = nextVideo;
     }
     s.productImages = [...now.keep, ...added];
+    if (checked.equipment) {
+      const plan = equipmentPlan(supplierForm.equipmentOf(s), checked.equipment, equipmentUploads);
+      s.equipment = plan.groups;
+      oldFiles.push(...plan.removed);
+    }
+    const stillUsed = new Set([s.backgroundImage, s.logo, s.video && s.video.url, ...supplierForm.equipmentFiles(s), ...s.productImages.map((p) => p.file)]);
     removed = [...now.removed.map((p) => p.file), ...oldFiles]
-      .filter((url) => url && url !== s.backgroundImage && url !== s.logo && !imageInUse(data, url, id));
+      .filter((url) => url && !stillUsed.has(url) && !imageInUse(data, url, id));
     if (checked.name !== null) s.name = checked.name;
     if (checked.category !== null) s.category = checked.category;
     if (checked.city !== null) s.city = checked.city;

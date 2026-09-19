@@ -58,7 +58,7 @@
 <section class="join-hero">
   <div class="wrap">
     <h1 id="edit-title">עריכת הפרופיל</h1>
-    <p>עדכנו את פרטי העסק, התמונות, הסרטון, החבילות והמחירים, הקישורים והלוגו. השינויים מופיעים באתר מיד ואין צורך באישור מחדש.</p>
+    <p>עדכנו את פרטי העסק, התמונות, הסרטון, הציוד, החבילות והמחירים, הקישורים והלוגו. השינויים מופיעים באתר מיד ואין צורך באישור מחדש.</p>
   </div>
 </section>
 
@@ -180,6 +180,13 @@
         <input type="file" id="ef-video" accept="video/mp4,video/webm,video/quicktime">
         <input id="ef-video-link" type="url" inputmode="url" placeholder="או הדביקו כאן קישור לסרטון" style="margin-top:10px;">
         <div class="field-hint">קובץ MP4 / WebM / MOV עד 45MB, או קישור מיוטיוב, אינסטגרם, טיקטוק או Vimeo. סרטון חדש מחליף את הקודם.</div>
+      </div>
+
+      <div class="form-field">
+        <label>ציוד <span class="edit-photo-count" id="edit-equipment-count"></span></label>
+        <div class="field-hint" style="margin-bottom:12px;">חלק נפרד בפרופיל שמציג רק תמונות וסרטונים של הציוד שלכם, מחולקים לקטגוריות שאתם קובעים — למשל "רמקולים", "תאורה", "מסכים". עד 10 קטגוריות, עד 20 פריטים בקטגוריה ועד 60 בסך הכול. לא חובה.</div>
+        <div class="edit-equipment" id="edit-equipment"></div>
+        <button type="button" id="edit-add-group" class="btn btn-secondary btn-sm">+ הוספת קטגוריית ציוד</button>
       </div>
 
       <div class="form-field">
