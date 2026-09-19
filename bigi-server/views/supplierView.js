@@ -211,8 +211,8 @@ function reviewsPanel(supplier, list, viewer) {
 
   return `
       <h3>ביקורות${summary.count ? ` <span class="review-avg"><bdi dir="ltr">${summary.average}</bdi> · ${summary.count} ${summary.count === 1 ? 'ביקורת' : 'ביקורות'}</span>` : ''}</h3>
-      ${write}
-      ${list.length ? `<ul class="review-list">${list.map((r) => reviewItem(r, own && r.id === own.id)).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
+      ${list.length ? `<ul class="review-list">${list.map((r) => reviewItem(r, own && r.id === own.id)).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}
+      ${write}`;
 }
 
 function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOwner = false, isAdmin = false }) {
@@ -373,8 +373,9 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   .owner-edit-btn:hover{ background:#fff; transform:translateY(-3px); box-shadow:0 12px 26px rgba(10,8,24,0.35); }
   .owner-note{ margin-top:10px; font-size:12.5px; color:rgba(255,255,255,0.85); }
   .review-avg{ font-size:13.5px; font-weight:700; color:var(--ink-soft); margin-inline-start:8px; }
-  .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
-  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-bottom:20px; display:grid; gap:14px; }
+  /* The reviews come first; writing one comes after them */
+  .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-top:18px; }
+  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-top:20px; display:grid; gap:14px; }
   .review-form-title{ font-weight:800; font-size:14.5px; }
   .review-form-hint{ font-size:13px; color:var(--muted); margin:-8px 0 0; }
   .score-pickers{ display:grid; gap:12px; }
