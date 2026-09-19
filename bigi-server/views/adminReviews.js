@@ -1,20 +1,23 @@
 const { page, adminTabs, escapeHtml } = require('./layout');
 
+const { SCORES } = require('../lib/reviews');
+
 const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
-const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 function row(r) {
   return `
     <div class="profile-row review-row" data-review="${escapeHtml(r.id)}">
       <div class="profile-info">
         <div class="profile-name" style="white-space:normal;">
-          <span class="review-stars-admin" aria-label="${r.rating} מתוך 5">${stars(r.rating)}</span>
+          <span class="review-overall-admin" aria-label="ציון כללי ${r.overall} מתוך 10"><bdi dir="ltr">${r.overall}</bdi>/10</span>
           ${escapeHtml(r.supplierName)}
         </div>
         <div class="profile-meta">
-          ${escapeHtml(r.reviewerName)}${r.reviewerEmail ? ` · <span class="ltr-value">${escapeHtml(r.reviewerEmail)}</span>` : ''}
+          ${escapeHtml(r.reviewerName)}${r.city ? `, ${escapeHtml(r.city)}` : ''}${r.reviewerEmail ? ` · <span class="ltr-value">${escapeHtml(r.reviewerEmail)}</span>` : ''}
           · ${dateFmt.format(new Date(r.createdAt))}
         </div>
+        <div class="profile-meta review-admin-scores">${SCORES.map(({ key, label }) => `${label} <b>${r.scores[key]}</b>`).join(' · ')}</div>
+        ${r.service ? `<div class="profile-meta">תיאור השירות: <b>${escapeHtml(r.service)}</b></div>` : ''}
         ${r.text ? `<p class="review-admin-text">${escapeHtml(r.text)}</p>` : '<div class="profile-meta">ללא טקסט</div>'}
         <div class="profile-links">
           <a href="/supplier/view/${escapeHtml(r.supplierId)}#reviews" target="_blank" rel="noopener">צפייה בפרופיל ↗</a>

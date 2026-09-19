@@ -1,8 +1,8 @@
 const { escapeHtml } = require('./layout');
-const { categoryById } = require('../lib/siteData');
+const { categoryById, CITIES } = require('../lib/siteData');
 const { normalizePhone } = require('../lib/catalog');
 const { socialLinksOf, equipmentOf } = require('../lib/supplierProfile');
-const { summarize } = require('../lib/reviews');
+const { summarize, SCORES, MAX_SERVICE } = require('../lib/reviews');
 
 // Deliberately NOT using views/layout.js's page() shell here — this page
 // needs the real site header (same markup as bigi/vendor.html) plus a
@@ -117,8 +117,42 @@ function equipmentGroup(group, poster) {
       </div>`;
 }
 
-const dateFmt = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
-const starsText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+// 26/04/2026, as on the review card, in Israel time: the server itself runs on UTC.
+const reviewDateParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric' });
+function reviewDate(iso) {
+  const part = Object.fromEntries(reviewDateParts.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+  return `${part.day}/${part.month}/${part.year}`;
+}
+
+// One review: the overall score in a circle, then who, when, what service,
+// their opinion, and the four scores.
+function reviewItem(r, mine) {
+  const who = `${r.name}${r.city ? `, ${r.city}` : ''}.`;
+  return `
+        <li class="review-item${mine ? ' is-mine' : ''}">
+          <div class="review-overall" aria-label="ציון כללי ${r.overall} מתוך 10">
+            <span class="review-overall-num"><bdi dir="ltr">${r.overall}</bdi></span>
+            <span class="review-overall-label">כללי</span>
+          </div>
+          <div class="review-main">
+            <div class="review-who">${escapeHtml(who)}${mine ? ' <span class="review-mine-tag">הביקורת שלכם</span>' : ''}</div>
+            <div class="review-date">משוב: <time datetime="${escapeHtml(r.createdAt)}"><bdi dir="ltr">${reviewDate(r.createdAt)}</bdi></time></div>
+            ${r.service ? `
+            <div class="review-block">
+              <div class="review-label">תיאור השירות:</div>
+              <p>${escapeHtml(r.service)}</p>
+            </div>` : ''}
+            ${r.text ? `
+            <div class="review-block">
+              <div class="review-label">חוות דעת:</div>
+              <p>${escapeHtml(r.text)}</p>
+            </div>` : ''}
+            <div class="review-block review-scores">
+              ${SCORES.map(({ key, label }) => `<span class="review-score">${label} <span class="review-score-num" aria-label="${r.scores[key]} מתוך 10"><bdi dir="ltr">${r.scores[key]}</bdi></span></span>`).join('')}
+            </div>
+          </div>
+        </li>`;
+}
 
 // What the reviews tab offers depends on who is looking: a customer gets the
 // form, anyone else gets told why not. Everything typed by a person is escaped.
@@ -138,10 +172,35 @@ function reviewsPanel(supplier, list, viewer) {
     write = `
       <form class="review-form" data-supplier="${escapeHtml(supplier.id)}" novalidate>
         <div class="review-form-title">${own ? 'הביקורת שלכם' : 'כתבו ביקורת'}</div>
-        <div class="star-input" role="radiogroup" aria-label="דירוג">
-          ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star${own && own.rating >= n ? ' on' : ''}" role="radio" data-v="${n}" aria-checked="${own && own.rating === n ? 'true' : 'false'}" aria-label="${n} כוכבים">★</button>`).join('')}
+        <p class="review-form-hint">תנו ציון מ־1 עד 10 לכל אחד מהתחומים. הציון הכללי הוא הממוצע שלהם.</p>
+        <div class="score-pickers">
+          ${SCORES.map(({ key, label }) => {
+            const current = own ? own.scores[key] : 0;
+            return `
+          <div class="score-picker" data-key="${key}">
+            <div class="score-picker-label" id="score-${key}">${label}</div>
+            <div class="score-row" role="radiogroup" aria-labelledby="score-${key}">
+              ${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `<button type="button" class="score-btn${current === n ? ' on' : ''}" role="radio" data-v="${n}" aria-checked="${current === n ? 'true' : 'false'}" aria-label="${label}: ${n}">${n}</button>`).join('')}
+            </div>
+          </div>`;
+          }).join('')}
         </div>
-        <textarea maxlength="1000" rows="3" placeholder="ספרו על החוויה שלכם (לא חובה)">${own ? escapeHtml(own.text) : ''}</textarea>
+        <div class="review-overall-preview" aria-live="polite">ציון כללי: <strong data-overall>${own ? own.overall : '—'}</strong></div>
+        <label class="review-field">
+          <span>תיאור השירות *</span>
+          <input type="text" name="service" maxlength="${MAX_SERVICE}" placeholder="איזה שירות קיבלתם? למשל: הובלה, DJ לחתונה" value="${own ? escapeHtml(own.service) : ''}">
+        </label>
+        <label class="review-field">
+          <span>עיר (לא חובה)</span>
+          <select name="city">
+            <option value="">בחרו עיר</option>
+            ${CITIES.map((c) => `<option value="${escapeHtml(c)}"${own && own.city === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="review-field">
+          <span>חוות דעת *</span>
+          <textarea name="text" maxlength="1000" rows="3" placeholder="ספרו על החוויה שלכם">${own ? escapeHtml(own.text) : ''}</textarea>
+        </label>
         <div class="review-form-error" role="alert" hidden></div>
         <div class="review-form-actions">
           <button type="submit" class="btn btn-primary btn-sm">${own ? 'עדכון הביקורת' : 'פרסום הביקורת'}</button>
@@ -151,17 +210,9 @@ function reviewsPanel(supplier, list, viewer) {
   }
 
   return `
-      <h3>ביקורות${summary.count ? ` <span class="review-avg"><span class="review-star-on">★</span> ${summary.average} · ${summary.count} ${summary.count === 1 ? 'ביקורת' : 'ביקורות'}</span>` : ''}</h3>
+      <h3>ביקורות${summary.count ? ` <span class="review-avg"><bdi dir="ltr">${summary.average}</bdi> · ${summary.count} ${summary.count === 1 ? 'ביקורת' : 'ביקורות'}</span>` : ''}</h3>
       ${write}
-      ${list.length ? `<ul class="review-list">${list.map((r) => `
-        <li class="review-item${own && r.id === own.id ? ' is-mine' : ''}">
-          <div class="review-head">
-            <strong>${escapeHtml(r.name)}</strong>
-            <span class="review-stars" role="img" aria-label="${r.rating} מתוך 5 כוכבים">${starsText(r.rating)}</span>
-            <time datetime="${escapeHtml(r.createdAt)}">${dateFmt.format(new Date(r.createdAt))}</time>
-          </div>
-          ${r.text ? `<p>${escapeHtml(r.text)}</p>` : ''}
-        </li>`).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
+      ${list.length ? `<ul class="review-list">${list.map((r) => reviewItem(r, own && r.id === own.id)).join('')}</ul>` : '<p class="tab-empty">עדיין אין ביקורות.</p>'}`;
 }
 
 function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOwner = false, isAdmin = false }) {
@@ -319,29 +370,59 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   .owner-edit-btn:hover{ background:#fff; transform:translateY(-3px); box-shadow:0 12px 26px rgba(10,8,24,0.35); }
   .owner-note{ margin-top:10px; font-size:12.5px; color:rgba(255,255,255,0.85); }
   .review-avg{ font-size:13.5px; font-weight:700; color:var(--ink-soft); margin-inline-start:8px; }
-  .review-star-on, .star.on, .review-stars{ color:#F5A623; }
   .review-note{ background:var(--bg-soft); border-radius:var(--radius-md); padding:14px 16px; font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
-  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-bottom:20px; display:grid; gap:12px; }
+  .review-form{ background:var(--bg-soft); border-radius:var(--radius-md); padding:16px; margin-bottom:20px; display:grid; gap:14px; }
   .review-form-title{ font-weight:800; font-size:14.5px; }
-  .star-input{ display:flex; gap:2px; }
-  .star{ width:44px; height:44px; font-size:28px; line-height:1; color:#D0CDE0; background:transparent; border-radius:10px; transition:transform .15s; }
-  .star.on{ color:#F5A623; }
-  .star:hover{ transform:scale(1.12); }
-  .star:focus-visible{ outline:3px solid var(--primary-light); outline-offset:1px; }
-  .review-form textarea{
-    width:100%; resize:vertical; min-height:84px; font:inherit; font-size:15px; color:var(--ink);
-    padding:12px 14px; background:#fff; border:1.5px solid var(--line); border-radius:var(--radius-md); outline:none;
+  .review-form-hint{ font-size:13px; color:var(--muted); margin:-8px 0 0; }
+  .score-pickers{ display:grid; gap:12px; }
+  .score-picker-label{ font-weight:700; font-size:14px; margin-bottom:6px; }
+  .score-row{ display:grid; grid-template-columns:repeat(10, minmax(0, 1fr)); gap:6px; }
+  .score-btn{
+    height:40px; border-radius:10px; background:#fff; border:1.5px solid var(--line); color:var(--ink-soft);
+    font-weight:800; font-size:14.5px; transition:background .15s, border-color .15s, color .15s;
+  }
+  .score-btn:hover{ border-color:var(--success); color:var(--success); }
+  .score-btn.on{ background:var(--success); border-color:var(--success); color:#fff; }
+  .score-btn:focus-visible{ outline:3px solid var(--primary-light); outline-offset:1px; }
+  .review-overall-preview{ font-size:14px; color:var(--ink-soft); }
+  .review-overall-preview strong{ font-size:16px; color:var(--ink); }
+  .review-field{ display:grid; gap:6px; font-size:14px; font-weight:700; }
+  .review-form textarea, .review-form input[type=text], .review-form select{
+    width:100%; font:inherit; font-size:15px; font-weight:400; color:var(--ink);
+    padding:11px 14px; background:#fff; border:1.5px solid var(--line); border-radius:var(--radius-md); outline:none;
     transition:border-color .2s, box-shadow .2s;
   }
-  .review-form textarea:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
+  .review-form textarea{ resize:vertical; min-height:84px; }
+  .review-form textarea:focus, .review-form input[type=text]:focus, .review-form select:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
   .review-form-error{ background:var(--accent-soft); color:#B8323C; border-radius:var(--radius-md); padding:10px 14px; font-size:13.5px; font-weight:600; }
   .review-form-actions{ display:flex; gap:10px; flex-wrap:wrap; }
-  .review-list{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
-  .review-item{ border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 16px; }
-  .review-item.is-mine{ border-color:var(--primary-light); background:var(--primary-soft); }
-  .review-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .review-head time{ margin-inline-start:auto; font-size:12.5px; color:var(--muted); }
-  .review-item p{ margin:8px 0 0; font-size:14.5px; line-height:1.65; color:var(--ink-soft); white-space:pre-wrap; overflow-wrap:anywhere; }
+
+  /* One review, laid out like the design: the overall score on the right, the text beside it */
+  .review-list{ list-style:none; margin:0; padding:0; display:grid; }
+  .review-item{ display:flex; gap:18px; padding:18px 0; border-top:1px solid var(--line); }
+  .review-item:first-child{ border-top:none; padding-top:6px; }
+  .review-item.is-mine{ background:var(--primary-soft); border-radius:var(--radius-md); padding-inline:14px; border-top-color:transparent; }
+  .review-overall{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; width:64px; }
+  .review-overall-num{
+    width:56px; height:56px; border-radius:50%; background:#fff; box-shadow:0 2px 10px rgba(26,23,48,0.14);
+    display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:500; color:var(--ink);
+  }
+  .review-overall-label{ font-size:15px; color:var(--ink-soft); }
+  .review-main{ flex:1; min-width:0; }
+  .review-who{ font-weight:800; font-size:16px; color:var(--primary-dark); overflow-wrap:anywhere; }
+  .review-mine-tag{ font-size:12px; font-weight:700; color:var(--primary); background:#fff; border-radius:var(--radius-pill); padding:2px 8px; margin-inline-start:6px; }
+  .review-date{ font-size:13.5px; color:var(--muted); margin-top:2px; }
+  .review-block{ padding:10px 0; border-top:1px solid var(--line); }
+  .review-block:first-of-type{ border-top:none; }
+  .review-date + .review-block{ border-top:none; padding-top:12px; }
+  .review-label{ font-size:14px; color:var(--primary-dark); margin-bottom:2px; }
+  .review-block p{ margin:0; font-size:15px; line-height:1.6; color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .review-scores{ display:flex; flex-wrap:wrap; gap:6px 16px; padding-bottom:0; }
+  .review-score{ display:inline-flex; align-items:center; gap:6px; font-size:15px; color:var(--ink); }
+  .review-score-num{
+    width:26px; height:26px; border-radius:50%; background:var(--success); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;
+  }
   .social-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .social-btn{
     display:inline-flex; align-items:center; min-height:40px; padding:9px 16px; max-width:100%;
@@ -378,6 +459,12 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   /* Pushed to the bottom so every button in the row lines up */
   .package-cta{ margin-top:auto; justify-content:center; font-size:14.5px; padding:13px 18px; }
   @media (max-width:760px){
+    /* Two rows of five, so every score is an easy tap */
+    .score-row{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
+    .score-btn{ height:44px; }
+    .review-item{ gap:12px; }
+    .review-overall{ width:52px; }
+    .review-overall-num{ width:48px; height:48px; font-size:19px; }
     .profile-hero-brand{ gap:12px; }
     .profile-logo{ width:56px; height:56px; border-radius:14px; padding:5px; }
     .js .profile-tabs{ padding:12px 14px 0; gap:6px; }
@@ -567,21 +654,43 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
 (function(){
   var form = document.querySelector('.review-form');
   if(!form) return;
-  var stars = Array.prototype.slice.call(form.querySelectorAll('.star'));
   var errorBox = form.querySelector('.review-form-error');
   var textarea = form.querySelector('textarea');
-  var rating = 0;
-  stars.forEach(function(star){ if(star.classList.contains('on')) rating = Math.max(rating, Number(star.getAttribute('data-v'))); });
+  var serviceInput = form.querySelector('input[name=service]');
+  var citySelect = form.querySelector('select[name=city]');
+  var overallEl = form.querySelector('[data-overall]');
+  var pickers = Array.prototype.slice.call(form.querySelectorAll('.score-picker'));
+  var scores = {};
+  pickers.forEach(function(p){
+    var on = p.querySelector('.score-btn.on');
+    scores[p.getAttribute('data-key')] = on ? Number(on.getAttribute('data-v')) : 0;
+  });
 
-  function paint(){
-    stars.forEach(function(star){
-      var v = Number(star.getAttribute('data-v'));
-      star.classList.toggle('on', v <= rating);
-      star.setAttribute('aria-checked', v === rating ? 'true' : 'false');
+  function paint(p){
+    var value = scores[p.getAttribute('data-key')];
+    p.querySelectorAll('.score-btn').forEach(function(b){
+      var on = Number(b.getAttribute('data-v')) === value;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
     });
+    var all = pickers.map(function(x){ return scores[x.getAttribute('data-key')]; });
+    overallEl.textContent = all.every(Boolean)
+      ? String(Math.round(all.reduce(function(a, b){ return a + b; }, 0) / all.length * 10) / 10)
+      : '—';
   }
-  stars.forEach(function(star){
-    star.addEventListener('click', function(){ rating = Number(star.getAttribute('data-v')); paint(); });
+  pickers.forEach(function(p){
+    var buttons = Array.prototype.slice.call(p.querySelectorAll('.score-btn'));
+    buttons.forEach(function(b, i){
+      b.addEventListener('click', function(){ scores[p.getAttribute('data-key')] = Number(b.getAttribute('data-v')); paint(p); });
+      // Right-to-left: the left arrow goes up a point, the right one down.
+      b.addEventListener('keydown', function(e){
+        var to = e.key === 'ArrowLeft' ? i + 1 : e.key === 'ArrowRight' ? i - 1 : null;
+        if(to === null || to < 0 || to >= buttons.length) return;
+        e.preventDefault();
+        buttons[to].focus();
+        buttons[to].click();
+      });
+    });
   });
 
   function request(method, body){
@@ -602,10 +711,13 @@ function supplierViewPage(supplier, { baseUrl, reviews = [], viewer = null, isOw
   form.addEventListener('submit', function(e){
     e.preventDefault();
     errorBox.hidden = true;
-    if(!rating){ fail('יש לבחור דירוג בכוכבים.'); return; }
+    var missing = pickers.filter(function(p){ return !scores[p.getAttribute('data-key')]; })[0];
+    if(missing){ fail('יש לתת ציון ל' + missing.querySelector('.score-picker-label').textContent + '.'); return; }
+    if(!serviceInput.value.trim()){ fail('יש לכתוב איזה שירות קיבלתם.'); serviceInput.focus(); return; }
+    if(!textarea.value.trim()){ fail('יש לכתוב חוות דעת.'); textarea.focus(); return; }
     var button = form.querySelector('button[type=submit]');
     button.disabled = true;
-    request('PUT', { rating: rating, text: textarea.value })
+    request('PUT', { scores: scores, service: serviceInput.value, city: citySelect.value, text: textarea.value })
       .then(function(r){
         if(r.ok) return done();
         button.disabled = false;

@@ -222,14 +222,15 @@ function publicVendors(db, { isAdmin }) {
     .sort((a, b) => String(a.publishedAt).localeCompare(String(b.publishedAt)))
     .map((s) => {
       const cat = categoryById(s.category);
-      // Real reviews, so the card, the star filter and the sort see them.
+      // Real reviews, so the card, the star filter and the sort see them. The
+      // listing works in 5 stars; a review's overall score is out of 10.
       const stats = reviews.summarize(reviews.reviewsFor(db, s.id));
       return {
         id: s.id,
         name: s.name,
         cat: cat ? cat.id : null,
         city: s.city || '',
-        rating: stats.average,
+        rating: stats.average === null ? null : Math.round(stats.average * 5) / 10,
         reviews: stats.count,
         priceFrom: null,
         ...featuredFields(s.id, 'חדש'),

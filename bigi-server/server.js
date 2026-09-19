@@ -791,7 +791,8 @@ app.put(
   reviewLimiter,
   async (req, res) => {
     const result = await db.withDb((data) => reviews.saveReview(data, {
-      supplierId: req.params.id, user: data.users[req.user.id], rating: req.body?.rating, text: req.body?.text,
+      supplierId: req.params.id, user: data.users[req.user.id],
+      scores: req.body?.scores, service: req.body?.service, city: req.body?.city, text: req.body?.text,
     }));
     if (result.error) {
       const status = result.code === 'forbidden' ? 403 : result.code === 'missing' ? 404 : 400;
