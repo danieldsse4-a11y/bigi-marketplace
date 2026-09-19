@@ -161,7 +161,10 @@
         <div class="field-hint" style="margin-bottom:12px;">לחצו ✕ כדי להסיר תמונה (לחיצה נוספת מחזירה אותה). צריך לפחות 5 תמונות ואפשר עד 30. JPG / PNG / WebP, עד 5MB לתמונה.</div>
         <div class="edit-photos" id="edit-photos"></div>
         <div id="edit-new-photos"></div>
-        <button type="button" id="edit-add-photo" class="btn btn-secondary btn-sm">+ הוספת תמונה</button>
+        <div class="edit-photo-actions">
+          <button type="button" id="edit-add-photo" class="btn btn-secondary btn-sm">+ הוספת תמונה</button>
+          <button type="button" id="edit-pick-photo" class="btn btn-ghost btn-sm">🖼️ בחירה מתמונות שכבר העליתי</button>
+        </div>
       </div>
 
       <div class="form-field">
@@ -209,6 +212,21 @@
       <button type="submit" class="btn btn-primary btn-block" id="edit-submit">שמירת השינויים</button>
     </form>
 
+  </div>
+</div>
+
+<div class="pick-overlay" id="pick-overlay" hidden>
+  <div class="pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+    <div class="pick-head">
+      <h2 id="pick-title">בחירה מתמונות שכבר העליתי</h2>
+      <button type="button" class="pick-close" id="pick-close" aria-label="סגירה">✕</button>
+    </div>
+    <p class="pick-hint" id="pick-hint"></p>
+    <div class="pick-grid" id="pick-grid"></div>
+    <div class="pick-foot">
+      <button type="button" class="btn btn-primary btn-sm" id="pick-confirm" disabled>הוספה</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="pick-cancel">ביטול</button>
+    </div>
   </div>
 </div>
 

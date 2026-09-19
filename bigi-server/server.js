@@ -371,9 +371,10 @@ function imageInUse(data, url, exceptId) {
 }
 
 // The equipment section as it will be stored: kept items are looked up in the
-// profile's current section, new files get their uploaded addresses. Returns
-// the groups and the files of the current section that are no longer used.
-function equipmentPlan(current, groups, uploads) {
+// profile's current section, new files get their uploaded addresses, and a
+// reused photo must be one of `own` (the profile's photos). Returns the groups
+// and the files of the current section that are no longer used, or { error }.
+function equipmentPlan(current, groups, uploads, own) {
   const existing = new Map();
   for (const g of supplierForm.equipmentOf({ equipment: current })) {
     for (const it of g.items) existing.set(it.id, it);
@@ -381,7 +382,9 @@ function equipmentPlan(current, groups, uploads) {
   const groupIds = new Set(current.map((g) => g.id));
   const seenGroups = new Set();
   const seenItems = new Set();
-  const next = groups.map((g) => {
+  const newId = () => `e${crypto.randomBytes(4).toString('hex')}`;
+  const next = [];
+  for (const g of groups) {
     // An id that is not this profile's (or appears twice) means a new group.
     const id = g.id && groupIds.has(g.id) && !seenGroups.has(g.id) ? g.id : `g${crypto.randomBytes(4).toString('hex')}`;
     seenGroups.add(id);
@@ -392,12 +395,18 @@ function equipmentPlan(current, groups, uploads) {
         if (found && !seenItems.has(it.id)) { seenItems.add(it.id); items.push(found); }
       } else if (it.file != null) {
         items.push(uploads[it.file]);
+      } else if (it.url != null) {
+        if (!own.has(it.url)) return { error: `"${g.name}": אחת התמונות שנבחרו לא שייכת לפרופיל הזה.` };
+        items.push({ id: newId(), kind: 'image', url: it.url });
       } else {
-        items.push({ id: `e${crypto.randomBytes(4).toString('hex')}`, kind: it.link.kind, url: it.link.url, ...(it.link.embed ? { embed: it.link.embed } : {}) });
+        items.push({ id: newId(), kind: it.link.kind, url: it.link.url, ...(it.link.embed ? { embed: it.link.embed } : {}) });
       }
     }
-    return { id, name: g.name, items };
-  });
+    // The same photo twice in one category would show twice in a row.
+    const photos = items.filter((it) => it.kind === 'image').map((it) => it.url);
+    if (new Set(photos).size !== photos.length) return { error: `"${g.name}": אותה תמונה מופיעה פעמיים בקטגוריה.` };
+    next.push({ id, name: g.name, items });
+  }
   const keptUrls = new Set(next.flatMap((g) => g.items.map((it) => it.url)));
   const removed = supplierForm.equipmentFiles({ equipment: current }).filter((url) => !keptUrls.has(url));
   return { groups: next, removed };
@@ -414,8 +423,17 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
   // The photo count is checked before anything is uploaded…
   const before = db.load().suppliers[id];
   if (!before) return res.status(404).json({ error: 'הפרופיל לא נמצא.' });
-  const plan = supplierForm.photoPlan(before.productImages, checked.removePhotos, form.productFiles.length);
+  const newPhotoCount = form.productFiles.length + checked.pickedPhotos.length;
+  const plan = supplierForm.photoPlan(before.productImages, checked.removePhotos, newPhotoCount);
   if (plan.error) return res.status(400).json({ error: plan.error });
+  // Reused photos are checked now too, so a bad one wastes no uploads.
+  const picked = supplierForm.pickedPhotoPlan(before, checked.pickedPhotos, plan.keep);
+  if (picked.error) return res.status(400).json({ error: picked.error });
+  if (checked.equipment) {
+    const pending = form.equipmentFiles.map((_, i) => ({ id: `pending${i}`, kind: 'image', url: `pending:${i}` }));
+    const eq = equipmentPlan(supplierForm.equipmentOf(before), checked.equipment, pending, supplierForm.profileImages(before));
+    if (eq.error) return res.status(400).json({ error: eq.error });
+  }
 
   const uploaded = [];
   let newLogo = null;
@@ -457,29 +475,38 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
   else if (checked.video) nextVideo = checked.video;
   else if (checked.removeVideo) nextVideo = null;
 
-  let replacedLogo = null;
   let removed = [];
   let problem = null;
   const saved = await db.withDb((data) => {
     const s = data.suppliers[id];
     if (!s || !stillAllowed(s)) return false;
     // …and again against the photos as they are now, in case they changed.
-    const now = supplierForm.photoPlan(s.productImages, checked.removePhotos, added.length);
+    // What may be reused is the profile's photos before this change.
+    const own = supplierForm.profileImages(s);
+    const now = supplierForm.photoPlan(s.productImages, checked.removePhotos, added.length + checked.pickedPhotos.length);
     if (now.error) { problem = now.error; return false; }
-    if (newLogo || form.removeLogo) { replacedLogo = s.logo || null; s.logo = newLogo || null; }
+    const reused = supplierForm.pickedPhotoPlan(s, checked.pickedPhotos, now.keep);
+    if (reused.error) { problem = reused.error; return false; }
+    let eq = null;
+    if (checked.equipment) {
+      eq = equipmentPlan(supplierForm.equipmentOf(s), checked.equipment, equipmentUploads, own);
+      if (eq.error) { problem = eq.error; return false; }
+    }
     const oldFiles = [];
+    if (newLogo || form.removeLogo) { oldFiles.push(s.logo); s.logo = newLogo || null; }
     if (newBackground) { oldFiles.push(s.backgroundImage); s.backgroundImage = newBackground; }
     if (nextVideo !== undefined) {
       // Only an uploaded file has anything to delete; a link is just text.
       if (s.video && s.video.kind === 'video' && s.video.url !== (nextVideo && nextVideo.url)) oldFiles.push(s.video.url);
       s.video = nextVideo;
     }
-    s.productImages = [...now.keep, ...added];
-    if (checked.equipment) {
-      const plan = equipmentPlan(supplierForm.equipmentOf(s), checked.equipment, equipmentUploads);
-      s.equipment = plan.groups;
-      oldFiles.push(...plan.removed);
+    s.productImages = [...now.keep, ...added, ...reused.added];
+    if (eq) {
+      s.equipment = eq.groups;
+      oldFiles.push(...eq.removed);
     }
+    // A file leaves storage only when no place on this profile (gallery,
+    // background, logo, video, ציוד) and no other profile uses it any more.
     const stillUsed = new Set([s.backgroundImage, s.logo, s.video && s.video.url, ...supplierForm.equipmentFiles(s), ...s.productImages.map((p) => p.file)]);
     removed = [...now.removed.map((p) => p.file), ...oldFiles]
       .filter((url) => url && !stillUsed.has(url) && !imageInUse(data, url, id));
@@ -502,9 +529,6 @@ async function saveProfileEdit(req, res, id, stillAllowed, { requirePhone = fals
   }
 
   // Only once the change is safely stored do the old files go.
-  if (replacedLogo && replacedLogo !== newLogo && !imageInUse(db.load(), replacedLogo, id)) {
-    await storage.deleteImageByUrl(replacedLogo);
-  }
   for (const url of removed) await storage.deleteImageByUrl(url);
   res.json({ profile: catalog.profileForAdmin(db.load(), id) });
 }

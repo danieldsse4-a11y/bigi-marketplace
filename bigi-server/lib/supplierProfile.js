@@ -146,6 +146,8 @@ function readEditForm(req) {
     productFiles: req.files?.productImages || [],
     captions: Array.isArray(captionsRaw) ? captionsRaw : (captionsRaw ? [captionsRaw] : []),
     removePhotos: text('removePhotos'),
+    // Photos the profile already has, reused in the main gallery: [{ url, caption }].
+    pickedPhotos: text('pickedPhotos'),
     // The whole ציוד section as the page wants it to be, plus its new files.
     equipment: sent('equipment'),
     equipmentFiles: req.files?.equipmentFiles || [],
@@ -196,6 +198,12 @@ function parseEquipment(raw, files) {
         }
         usedFiles.add(index);
         items.push({ file: index });
+      } else if (item.url != null) {
+        // A photo this profile already has, reused here. Checked against the
+        // profile's own images when the save is applied.
+        const url = String(item.url);
+        if (!url || url.length > 1000) return { error: `"${name}": אחת התמונות שנבחרו לא תקינה.` };
+        items.push({ url });
       } else if (item.link != null) {
         const link = normalizeVideoLink(String(item.link).trim());
         if (!link) return { error: `"${name}": אחד הקישורים ריק.` };
@@ -231,6 +239,34 @@ function equipmentFiles(supplier) {
   return equipmentOf(supplier).flatMap((g) => g.items.filter((it) => it.kind === 'image' || it.kind === 'video').map((it) => it.url));
 }
 
+// Every photo the profile has anywhere — the ones a supplier may reuse
+// elsewhere on the same profile without uploading them again.
+function profileImages(supplier) {
+  const urls = [
+    ...(supplier.productImages || []).map((p) => p.file),
+    supplier.backgroundImage,
+    supplier.logo,
+    ...equipmentOf(supplier).flatMap((g) => g.items.filter((it) => it.kind === 'image').map((it) => it.url)),
+  ];
+  return new Set(urls.filter(Boolean));
+}
+
+// Main-gallery photos picked from the profile's own images: each one must be
+// the profile's, and not already among the photos that stay.
+// Returns { added } or { error }.
+function pickedPhotoPlan(supplier, picked, keep) {
+  const own = profileImages(supplier);
+  const inGallery = new Set(keep.map((p) => p.file));
+  const added = [];
+  for (const p of picked) {
+    if (!own.has(p.url)) return { error: 'אחת התמונות שנבחרו לא שייכת לפרופיל הזה.' };
+    if (inGallery.has(p.url)) return { error: 'אחת התמונות שנבחרו כבר נמצאת בתמונות שלכם.' };
+    inGallery.add(p.url);
+    added.push({ file: p.url, caption: p.caption });
+  }
+  return { added };
+}
+
 // Returns { error } or the cleaned values ready to store. The photo count is
 // checked where the profile's current photos are known (see photoPlan).
 function checkEdit(form, { requirePhone = false } = {}) {
@@ -260,6 +296,17 @@ function checkEdit(form, { requirePhone = false } = {}) {
   if (removals.error) return { error: removals.error };
   if (removals.value.some((u) => typeof u !== 'string')) return { error: 'התמונות להסרה לא תקינות.' };
 
+  const picks = parseJsonArray(form.pickedPhotos, 'התמונות שנבחרו');
+  if (picks.error) return { error: picks.error };
+  const pickedPhotos = [];
+  for (const p of picks.value) {
+    if (!p || typeof p !== 'object' || typeof p.url !== 'string' || !p.url || p.url.length > 1000) return { error: 'התמונות שנבחרו לא תקינות.' };
+    const caption = String(p.caption ?? '').trim();
+    if (!caption) return { error: 'לכל תמונה חדשה צריך תיאור.' };
+    if (caption.length > 200) return { error: 'אחד מתיאורי התמונות ארוך מדי (עד 200 תווים).' };
+    pickedPhotos.push({ url: p.url, caption });
+  }
+
   const extras = parseExtras(form);
   if (extras.error) return { error: extras.error };
   const equipment = parseEquipment(form.equipment, form.equipmentFiles);
@@ -268,7 +315,7 @@ function checkEdit(form, { requirePhone = false } = {}) {
     name: form.name, category: form.category, city: form.city,
     description: form.description, contactEmail: form.contactEmail, phone: form.phone,
     packages: extras.packages, socialLinks: extras.socialLinks,
-    captions, removePhotos: new Set(removals.value),
+    captions, removePhotos: new Set(removals.value), pickedPhotos,
     // A pasted link, already in the shape the profile stores; null when none.
     video, removeVideo: form.removeVideo,
     // null when the page did not send the section: it is then left as it is.
@@ -493,5 +540,6 @@ module.exports = {
   MAX_EQUIPMENT_GROUPS, MAX_EQUIPMENT_NAME, MAX_EQUIPMENT_PER_GROUP, MAX_EQUIPMENT_ITEMS, VIDEO_MIME,
   parseForm, readForm, validateForm, buildSupplier, normalizeVideoLink,
   parseEditForm, readEditForm, checkEdit, photoPlan, phoneError, parseEquipment, equipmentOf, equipmentFiles,
+  profileImages, pickedPhotoPlan,
   normalizePackages, normalizeSocialLinks, normalizeUrl, socialLinksOf,
 };

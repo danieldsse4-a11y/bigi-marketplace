@@ -883,6 +883,50 @@ body.lb-open{ position:fixed; left:0; right:0; width:100%; overflow:hidden; }
 .edit-group-link input{ flex:1; min-width:0; }
 .edit-group-count{ width:100%; font-size:12.5px; color:var(--muted); font-weight:600; }
 .edit-group-count.is-full{ color:#B8323C; font-weight:800; }
+.edit-photo-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+.edit-photo-actions .btn[hidden]{ display:none; }
+/* A reused photo in the main gallery: its thumbnail stands where the file picker would be */
+.product-photo-row.is-picked .picked-thumb{ width:72px; height:72px; object-fit:cover; border-radius:10px; display:block; margin-bottom:8px; }
+
+/* The picker: every photo the profile already has, to reuse without uploading */
+.pick-overlay{
+  position:fixed; inset:0; z-index:900; background:rgba(12,10,26,0.62);
+  display:flex; align-items:center; justify-content:center; padding:16px;
+}
+.pick-overlay[hidden]{ display:none; }
+.pick-panel{
+  background:#fff; border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
+  width:100%; max-width:680px; max-height:calc(100vh - 32px); display:flex; flex-direction:column; overflow:hidden;
+}
+.pick-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px 6px; }
+.pick-head h2{ font-size:18px; }
+.pick-close{ width:40px; height:40px; border-radius:50%; background:var(--bg-soft); color:var(--ink-soft); font-size:15px; font-weight:800; flex-shrink:0; }
+.pick-close:hover{ background:var(--primary-soft); color:var(--primary); }
+.pick-hint{ padding:0 20px 12px; font-size:13.5px; color:var(--muted); }
+.pick-grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:10px;
+  padding:4px 20px 16px; overflow-y:auto; flex:1; min-height:0;
+}
+.pick-item{
+  position:relative; aspect-ratio:1; border-radius:var(--radius-md); overflow:hidden; padding:0;
+  background:var(--bg-soft); border:3px solid transparent; transition:border-color .15s, transform .15s;
+}
+.pick-item img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pick-item:hover:not(:disabled){ transform:scale(1.03); }
+.pick-item:focus-visible{ outline:3px solid var(--primary-light); outline-offset:2px; }
+.pick-item[aria-pressed="true"]{ border-color:var(--primary); }
+.pick-item[aria-pressed="true"]::after{
+  content:"✓"; position:absolute; top:6px; inset-inline-start:6px; width:26px; height:26px; border-radius:50%;
+  background:var(--primary); color:#fff; font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:center;
+}
+.pick-item:disabled{ cursor:default; }
+.pick-item:disabled img{ opacity:.35; filter:grayscale(1); }
+.pick-here{
+  position:absolute; inset-inline:0; bottom:0; padding:5px 6px; background:rgba(12,10,26,0.72);
+  color:#fff; font-size:12px; font-weight:800; text-align:center;
+}
+.pick-foot{ display:flex; gap:10px; padding:14px 20px; border-top:1px solid var(--line); background:#fff; }
+.pick-foot .btn:disabled{ opacity:.45; cursor:default; transform:none; box-shadow:none; }
 .logo-current img{ width:64px; height:64px; object-fit:contain; background:#fff; border:1px solid var(--line); border-radius:14px; padding:5px; }
 .form-field .check-row, .check-row{ display:flex; align-items:center; gap:8px; margin-bottom:0; font-size:14px; font-weight:600; cursor:pointer; min-height:44px; }
 .check-row input{ flex:0 0 auto; width:18px; height:18px; padding:0; margin:0; accent-color:var(--primary); }

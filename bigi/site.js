@@ -980,18 +980,23 @@
     const toRemove = new Set();
     let currentPhotos = [];
 
-    const newFiles = () => $$('.product-photo-row', newRows)
+    const pickPhotoBtn = $('#edit-pick-photo');
+    const newFiles = () => $$('.product-photo-row:not(.is-picked)', newRows)
       .map(row => ({ file: $('input[type=file]', row).files[0], caption: $('.photo-caption-input', row).value.trim() }))
       .filter(r => r.file);
-    const photoTotal = () => currentPhotos.length - toRemove.size + newFiles().length;
+    // Photos the profile already has, reused here without uploading them again.
+    const pickedPhotos = () => $$('.product-photo-row.is-picked', newRows)
+      .map(row => ({ url: row.dataset.url, caption: $('.photo-caption-input', row).value.trim() }));
+    const photoTotal = () => currentPhotos.length - toRemove.size + newFiles().length + pickedPhotos().length;
+    const galleryRoom = () => MAX_PRODUCT_IMAGES - (currentPhotos.length - toRemove.size + $$('.product-photo-row', newRows).length);
 
     function updatePhotoCount(){
       const total = photoTotal();
       const counter = $('#edit-photo-count');
       counter.textContent = `(${total} מתוך ${MAX_PRODUCT_IMAGES})`;
       counter.classList.toggle('is-low', total < MIN_PRODUCT_IMAGES);
-      const rows = $$('.product-photo-row', newRows).length;
-      addPhotoBtn.hidden = currentPhotos.length - toRemove.size + rows >= MAX_PRODUCT_IMAGES;
+      addPhotoBtn.hidden = galleryRoom() <= 0;
+      pickPhotoBtn.hidden = galleryRoom() <= 0;
     }
 
     function renderPhotos(){
@@ -1044,6 +1049,102 @@
       input.focus();
     }
     addPhotoBtn.addEventListener('click', addNewRow);
+
+    /* The picker: every photo the profile has saved anywhere (gallery,
+       background, logo, ציוד), each once. `here` are the ones already in the
+       place being filled; they show as "כבר כאן" and can't be picked. */
+    let library = [];
+    const pickOverlay = $('#pick-overlay');
+    const pickGrid = $('#pick-grid');
+    const pickConfirm = $('#pick-confirm');
+    let pickDone = null;
+    let pickOpener = null;
+    let pickRoom = 0;
+    const picked = new Set();
+
+    function updatePickConfirm(){
+      pickConfirm.disabled = picked.size === 0;
+      pickConfirm.textContent = picked.size ? `הוספת ${picked.size} ${picked.size === 1 ? 'תמונה' : 'תמונות'}` : 'הוספה';
+    }
+    function openPicker({ here, room, onPick }){
+      picked.clear();
+      pickRoom = room;
+      pickDone = onPick;
+      pickOpener = document.activeElement;
+      $('#pick-hint').textContent = `לחצו על תמונות כדי לבחור אותן. אפשר לבחור עד ${room} כאן. התמונה לא מועלית שוב.`;
+      pickGrid.innerHTML = library.map((url, i) => {
+        const isHere = here.has(url);
+        return `<button type="button" class="pick-item" data-i="${i}" aria-pressed="false"${isHere ? ' disabled' : ''} aria-label="${isHere ? 'כבר כאן' : 'בחירת תמונה ' + (i + 1)}">
+          <img src="${esc(url)}" alt="" loading="lazy">${isHere ? '<span class="pick-here">כבר כאן</span>' : ''}
+        </button>`;
+      }).join('');
+      updatePickConfirm();
+      pickOverlay.hidden = false;
+      document.body.style.overflow = 'hidden';
+      const first = $('.pick-item:not(:disabled)', pickGrid) || $('#pick-close');
+      first.focus();
+    }
+    function closePicker(){
+      pickOverlay.hidden = true;
+      document.body.style.overflow = '';
+      pickDone = null;
+      if(pickOpener && document.contains(pickOpener)) pickOpener.focus();
+    }
+    pickGrid.addEventListener('click', (e) => {
+      const item = e.target.closest('.pick-item');
+      if(!item || item.disabled) return;
+      const url = library[Number(item.dataset.i)];
+      if(picked.has(url)) picked.delete(url);
+      else if(picked.size < pickRoom) picked.add(url);
+      else return;
+      item.setAttribute('aria-pressed', picked.has(url) ? 'true' : 'false');
+      updatePickConfirm();
+    });
+    pickConfirm.addEventListener('click', () => {
+      // In the order they appear in the picker, not the order they were tapped.
+      const urls = library.filter(url => picked.has(url));
+      const done = pickDone;
+      closePicker();
+      if(done && urls.length) done(urls);
+    });
+    $('#pick-cancel').addEventListener('click', closePicker);
+    $('#pick-close').addEventListener('click', closePicker);
+    pickOverlay.addEventListener('click', (e) => { if(e.target === pickOverlay) closePicker(); });
+    pickOverlay.addEventListener('keydown', (e) => {
+      if(e.key === 'Escape'){ e.preventDefault(); closePicker(); return; }
+      if(e.key !== 'Tab') return;
+      const focusable = $$('button:not(:disabled)', pickOverlay);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    });
+
+    // A reused photo joins the gallery as a row with its thumbnail and a caption box.
+    function addPickedRow(url){
+      const row = document.createElement('div');
+      row.className = 'product-photo-row is-picked';
+      row.dataset.url = url;
+      row.innerHTML = `
+        <div class="product-photo-fields">
+          <label class="product-photo-label">תמונה שכבר העליתם</label>
+          <img class="picked-thumb" src="${esc(url)}" alt="">
+          <input type="text" maxlength="200" placeholder="מה רואים בתמונה הזו?" class="photo-caption-input">
+        </div>
+        <button type="button" class="remove-row-btn" aria-label="ביטול התמונה החדשה">✕</button>`;
+      newRows.appendChild(row);
+    }
+    pickPhotoBtn.addEventListener('click', () => {
+      const here = new Set([
+        ...currentPhotos.filter(p => !toRemove.has(p.file)).map(p => p.file),
+        ...pickedPhotos().map(p => p.url),
+      ]);
+      openPicker({ here, room: galleryRoom(), onPick: (urls) => {
+        urls.forEach(addPickedRow);
+        updatePhotoCount();
+        const inputs = $$('.product-photo-row.is-picked .photo-caption-input', newRows);
+        inputs[inputs.length - urls.length].focus();
+      } });
+    });
     newRows.addEventListener('click', (e) => {
       const btn = e.target.closest('.remove-row-btn');
       if(btn){ btn.closest('.product-photo-row').remove(); updatePhotoCount(); }
@@ -1116,7 +1217,7 @@
             gone ? 'יוסר בשמירה' : (isImage ? '' : 'סרטון'));
         });
         const added = g.added.map((a, i) => tile(`is-new${a.file && !a.thumb ? ' is-video' : ''}${a.link ? ' is-video' : ''}`, `data-n="${i}"`,
-          a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : play, a.link ? 'קישור לסרטון' : (a.thumb ? '' : esc(a.file.name))));
+          a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : play, a.link ? 'קישור לסרטון' : (a.url ? 'תמונה קיימת' : (a.thumb ? '' : esc(a.file.name)))));
         return `
         <div class="edit-group" data-g="${gi}">
           <div class="edit-group-head">
@@ -1128,6 +1229,7 @@
           <div class="edit-photos">${existing.join('')}${added.join('')}</div>
           <div class="edit-group-actions">
             <label class="btn btn-secondary btn-sm">📷 הוספת תמונות או סרטונים<input type="file" multiple accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime"${count >= EQ.perGroup ? ' disabled' : ''}></label>
+            <button type="button" class="btn btn-ghost btn-sm" data-act="pick"${count >= EQ.perGroup ? ' disabled' : ''}>🖼️ בחירה מתמונות שכבר העליתי</button>
             <div class="edit-group-link">
               <input type="url" inputmode="url" class="edit-group-link-input" placeholder="או הדביקו קישור לסרטון" aria-label="קישור לסרטון"${count >= EQ.perGroup ? ' disabled' : ''}>
               <button type="button" class="btn btn-ghost btn-sm" data-act="link"${count >= EQ.perGroup ? ' disabled' : ''}>הוספה</button>
@@ -1177,6 +1279,19 @@
         groups.splice(gi, 1);
         renderEquipment();
         (addGroupBtn.hidden ? $('.edit-group-name', eqRoot) : addGroupBtn).focus();
+      } else if(act === 'pick'){
+        const here = new Set([
+          ...g.items.filter(it => it.kind === 'image' && !g.removed.has(it.id)).map(it => it.url),
+          ...g.added.filter(a => a.url).map(a => a.url),
+        ]);
+        const room = Math.min(EQ.perGroup - groupCount(g), EQ.total - eqTotal());
+        if(room <= 0) return fail(`אפשר עד ${EQ.total} פריטי ציוד בסך הכול.`);
+        openPicker({ here, room, onPick: (urls) => {
+          urls.forEach(url => g.added.push({ url, thumb: url }));
+          renderEquipment();
+          const again = $(`.edit-group[data-g="${groups.indexOf(g)}"] [data-act=pick]`, eqRoot);
+          if(again && !again.disabled) again.focus();
+        } });
       } else if(act === 'link'){
         const input = $('.edit-group-link-input', card);
         const link = input.value.trim();
@@ -1190,7 +1305,7 @@
         const photo = btn.closest('.edit-photo');
         if(photo.dataset.n !== undefined){
           const [gone] = g.added.splice(Number(photo.dataset.n), 1);
-          if(gone && gone.thumb) URL.revokeObjectURL(gone.thumb);
+          if(gone && gone.file && gone.thumb) URL.revokeObjectURL(gone.thumb);
         } else {
           const item = g.items[Number(photo.dataset.i)];
           if(g.removed.has(item.id)) g.removed.delete(item.id); else g.removed.add(item.id);
@@ -1229,7 +1344,7 @@
         name: g.name.trim(),
         items: [
           ...g.items.filter(it => !g.removed.has(it.id)).map(it => ({ id: it.id })),
-          ...g.added.map(a => (a.file ? { file: files.push(a.file) - 1 } : { link: a.link })),
+          ...g.added.map(a => (a.file ? { file: files.push(a.file) - 1 } : a.url ? { url: a.url } : { link: a.link })),
         ],
       }));
       return { list, files };
@@ -1249,11 +1364,17 @@
     }
 
     function fill(p){
-      groups.forEach(g => g.added.forEach(a => { if(a.thumb) URL.revokeObjectURL(a.thumb); }));
+      groups.forEach(g => g.added.forEach(a => { if(a.file && a.thumb) URL.revokeObjectURL(a.thumb); }));
       groups = (Array.isArray(p.equipment) ? p.equipment : []).map(g => ({
         id: g.id, name: g.name || '', items: Array.isArray(g.items) ? g.items : [], removed: new Set(), added: [],
       }));
       renderEquipment();
+      library = [...new Set([
+        ...(p.productImages || []).map(x => x.file),
+        p.backgroundImage,
+        p.logo,
+        ...groups.flatMap(g => g.items.filter(it => it.kind === 'image').map(it => it.url)),
+      ].filter(Boolean))];
       $('#ef-name').value = p.name || '';
       $('#ef-category').value = p.category || '';
       $('#ef-city').value = p.city || '';
@@ -1304,7 +1425,8 @@
       errorBox.hidden = true;
       // The same photo rules the server applies, so the answer is immediate.
       const added = newFiles();
-      if(added.some(r => !r.caption)) return fail('לכל תמונה חדשה צריך תיאור.');
+      const reused = pickedPhotos();
+      if(added.some(r => !r.caption) || reused.some(r => !r.caption)) return fail('לכל תמונה חדשה צריך תיאור.');
       const total = photoTotal();
       if(total < MIN_PRODUCT_IMAGES) return fail(`צריך להשאיר לפחות ${MIN_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
       if(total > MAX_PRODUCT_IMAGES) return fail(`אפשר עד ${MAX_PRODUCT_IMAGES} תמונות (אחרי השינוי יהיו ${total}).`);
@@ -1331,6 +1453,7 @@
       formData.set('socialLinks', JSON.stringify(extras.socialLinks));
       formData.set('removePhotos', JSON.stringify([...toRemove]));
       added.forEach(r => { formData.append('productImages', r.file); formData.append('productCaptions', r.caption); });
+      formData.set('pickedPhotos', JSON.stringify(reused));
       formData.set('equipment', JSON.stringify(equipment.list));
       equipment.files.forEach(f => formData.append('equipmentFiles', f));
       if(removeLogo.checked) formData.set('removeLogo', '1');
